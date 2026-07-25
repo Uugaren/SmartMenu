@@ -1,0 +1,15 @@
+name: Supabase Keep Alive
+
+on:
+  schedule:
+    # Run every 3 days at 00:00 UTC
+    - cron: '0 0 */3 * *'
+  workflow_dispatch:
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Ping Supabase
+        run: |
+          curl -s "${{ secrets.APP_URL }}/api/keep-alive" || echo "Ping request executed"
