@@ -108,6 +108,8 @@ export function generateMonthlyMenu(
       lunchSide: LUNCH_SIDE,
       juice: getJuice(dayIndex),
       dessert: getDessert(dayOfWeek, sundayCounter - 1),
+      lunchDiabetic: 'Colocar mais folhas cruas ½ porção de cada carboidratos, se houver mais de 1 opção.',
+      lunchPastoso: 'colocar módulo de fibras (1 colher de chá)',
 
       // Lanche da tarde
       afternoonSnack: getAfternoonSnack(dayOfWeek, weekOfMonth),
@@ -119,6 +121,7 @@ export function generateMonthlyMenu(
 
       // Ceia
       supper: getSupper(dayIndex),
+      supperDiabetic: 'Mingau de aveia com adoçante ou Escolher 2 opções: Queijo, Ovo, pão integral, banana cozida com canela e farelo de aveia, batata doce, aipim com queijo minas, café com leite e adoçante, Iogurte diet.',
     };
 
     dailyMeals.push(meal);

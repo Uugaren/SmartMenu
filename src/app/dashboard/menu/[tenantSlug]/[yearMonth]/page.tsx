@@ -279,11 +279,14 @@ export default function MenuEditorPage({ params }: { params: Params }) {
         lunchSide: 'acompanhamento',
         juice: 'suco',
         dessert: 'sobremesa',
+        lunchDiabetic: 'salada',
+        lunchPastoso: 'acompanhamento',
         afternoonSnack: 'lanche',
         afternoonSnackDiabetic: 'lanche',
         dinner: 'jantar',
         dinnerDiabetic: 'jantar',
         supper: 'ceia',
+        supperDiabetic: 'ceia',
         date: 'cafe',
         dayOfWeek: 'cafe',
         weekOfMonth: 'cafe',
@@ -433,10 +436,29 @@ export default function MenuEditorPage({ params }: { params: Params }) {
         const combined = [...dessertDishes, ...defaults.map((f) => ({ id: f, name: f }))];
         return Array.from(new Map(combined.map((item) => [item.name, item])).values());
       }
+      case 'lunchDiabetic': {
+        const saladDishes = dishes.filter((d) => d.category === 'salada').map((d) => ({ id: d.name, name: d.name }));
+        const defaults = [
+          'Colocar mais folhas cruas ½ porção de cada carboidratos, se houver mais de 1 opção.',
+          'Salada crua à vontade + 1/2 porção de carboidrato',
+        ];
+        const combined = [...saladDishes, ...defaults.map((f) => ({ id: f, name: f }))];
+        return Array.from(new Map(combined.map((item) => [item.name, item])).values());
+      }
+      case 'lunchPastoso': {
+        const sideDishes = dishes.filter((d) => d.category === 'acompanhamento').map((d) => ({ id: d.name, name: d.name }));
+        const defaults = [
+          'colocar módulo de fibras (1 colher de chá)',
+          'Alimentos batidos no liquidificador + módulo de fibras',
+        ];
+        const combined = [...sideDishes, ...defaults.map((f) => ({ id: f, name: f }))];
+        return Array.from(new Map(combined.map((item) => [item.name, item])).values());
+      }
       case 'afternoonSnack':
       case 'afternoonSnackDiabetic': {
         const snackDishes = dishes.filter((d) => d.category === 'lanche').map((d) => ({ id: d.name, name: d.name }));
         const defaults = [
+          'Escolher 3 opções: Queijo, Ovo, pão integral, banana cozida com canela e farelo de aveia, batata doce, aipim com queijo minas, café com leite e adoçante, Iogurte diet.',
           'Pão francês/doce Café Com Leite.',
           'Empadão + Café com leite',
           'Tortinha de frango + Café com leite',
@@ -452,6 +474,7 @@ export default function MenuEditorPage({ params }: { params: Params }) {
       case 'dinnerDiabetic': {
         const dinnerDishes = dishes.filter((d) => d.category === 'jantar').map((d) => ({ id: d.name, name: d.name }));
         const defaults = [
+          'Repetir o almoço, porém ½ porção de carboidratos ou caldo de legumes com módulo de fibras( 1 colher de chá)',
           'Sopa de macarrão com legumes e frango desfiado.',
           'Caldo de legumes.',
           'Caldo de inhame com carne moída.',
@@ -464,9 +487,11 @@ export default function MenuEditorPage({ params }: { params: Params }) {
         const combined = [...dinnerDishes, ...defaults.map((f) => ({ id: f, name: f }))];
         return Array.from(new Map(combined.map((item) => [item.name, item])).values());
       }
-      case 'supper': {
+      case 'supper':
+      case 'supperDiabetic': {
         const supperDishes = dishes.filter((d) => d.category === 'ceia').map((d) => ({ id: d.name, name: d.name }));
         const defaults = [
+          'Mingau de aveia com adoçante ou Escolher 2 opções: Queijo, Ovo, pão integral, banana cozida com canela e farelo de aveia, batata doce, aipim com queijo minas, café com leite e adoçante, Iogurte diet.',
           'Mingau de aveia e banana',
           'Mingau de fubá',
           'Mingau de tapioca',
@@ -644,7 +669,30 @@ export default function MenuEditorPage({ params }: { params: Params }) {
                             <div className="space-y-2">
                               {/* Main Breakfast & Fruit Dropdown */}
                               <div className="text-[11px] leading-tight">
-                                Pão francês/Doce com manteiga Café com leite{' '}
+                                <span
+                                  className="editable-cell cursor-pointer hover:bg-amber-100 rounded px-0.5 inline-block"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    toggleEdit(day.date, 'breakfast');
+                                  }}
+                                >
+                                  {editingCell?.date === day.date && editingCell?.field === 'breakfast' ? (
+                                    <div onClick={(e) => e.stopPropagation()}>
+                                      <CreatableInlineDropdown
+                                        options={getOptionsForField('breakfast')}
+                                        value={day.breakfast}
+                                        onSelect={(val) => updateDailyMealField(day.date, 'breakfast', val)}
+                                        onClose={() => setEditingCell(null)}
+                                        placeholder="Digite ou selecione o café..."
+                                      />
+                                    </div>
+                                  ) : (
+                                    <>
+                                      {day.breakfast || 'Pão francês/Doce com manteiga Café com leite'}
+                                      <Pencil className="w-2.5 h-2.5 inline ml-1 opacity-40 no-print" />
+                                    </>
+                                  )}
+                                </span>{' '}
                                 <span
                                   className="editable-cell text-amber-700 font-bold px-0.5 py-0.2 rounded hover:bg-amber-100 transition-colors inline-block"
                                   onClick={(e) => {
@@ -854,11 +902,55 @@ export default function MenuEditorPage({ params }: { params: Params }) {
 
                               {/* Diabéticos & Pastosos notes */}
                               <div className="pt-1 border-t border-slate-200 text-[9.5px] leading-tight text-slate-700 space-y-1">
-                                <div>
-                                  <span className="font-bold text-red-800">Diabéticos:</span> Colocar mais folhas cruas 1/2 porção de cada carboidratos, se houver mais de 1 opção.
+                                <div
+                                  className="editable-cell cursor-pointer hover:bg-red-50 rounded px-0.5"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    toggleEdit(day.date, 'lunchDiabetic');
+                                  }}
+                                >
+                                  <span className="font-bold text-red-800">Diabéticos:</span>{' '}
+                                  {editingCell?.date === day.date && editingCell?.field === 'lunchDiabetic' ? (
+                                    <div onClick={(e) => e.stopPropagation()}>
+                                      <CreatableInlineDropdown
+                                        options={getOptionsForField('lunchDiabetic')}
+                                        value={day.lunchDiabetic ?? 'Colocar mais folhas cruas ½ porção de cada carboidratos, se houver mais de 1 opção.'}
+                                        onSelect={(val) => updateDailyMealField(day.date, 'lunchDiabetic', val)}
+                                        onClose={() => setEditingCell(null)}
+                                        placeholder="Digite ou selecione..."
+                                      />
+                                    </div>
+                                  ) : (
+                                    <>
+                                      {day.lunchDiabetic ?? 'Colocar mais folhas cruas ½ porção de cada carboidratos, se houver mais de 1 opção.'}
+                                      <Pencil className="w-2 h-2 inline ml-1 opacity-40 no-print" />
+                                    </>
+                                  )}
                                 </div>
-                                <div>
-                                  <span className="font-bold text-red-900">Pastoso:</span> colocar módulo de fibras (1 colher de chá)
+                                <div
+                                  className="editable-cell cursor-pointer hover:bg-red-50 rounded px-0.5"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    toggleEdit(day.date, 'lunchPastoso');
+                                  }}
+                                >
+                                  <span className="font-bold text-red-900">Pastoso:</span>{' '}
+                                  {editingCell?.date === day.date && editingCell?.field === 'lunchPastoso' ? (
+                                    <div onClick={(e) => e.stopPropagation()}>
+                                      <CreatableInlineDropdown
+                                        options={getOptionsForField('lunchPastoso')}
+                                        value={day.lunchPastoso ?? 'colocar módulo de fibras (1 colher de chá)'}
+                                        onSelect={(val) => updateDailyMealField(day.date, 'lunchPastoso', val)}
+                                        onClose={() => setEditingCell(null)}
+                                        placeholder="Digite ou selecione..."
+                                      />
+                                    </div>
+                                  ) : (
+                                    <>
+                                      {day.lunchPastoso ?? 'colocar módulo de fibras (1 colher de chá)'}
+                                      <Pencil className="w-2 h-2 inline ml-1 opacity-40 no-print" />
+                                    </>
+                                  )}
                                 </div>
                               </div>
                             </div>
@@ -945,7 +1037,31 @@ export default function MenuEditorPage({ params }: { params: Params }) {
                               </div>
 
                               <div className="text-[9.5px] leading-tight text-red-800">
-                                <span className="font-bold">Diabéticos:</span> Escolher 3 opções: Queijo, Ovo, pão integral, banana cozida com canela e farelo de aveia, batata doce, aipim com queijo minas, café com leite e adoçante, Iogurte diet.
+                                <span className="font-bold">Diabéticos:</span>{' '}
+                                <span
+                                  className="editable-cell hover:bg-sky-100 rounded px-0.5 inline-block cursor-pointer"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    toggleEdit(day.date, 'afternoonSnackDiabetic');
+                                  }}
+                                >
+                                  {editingCell?.date === day.date && editingCell?.field === 'afternoonSnackDiabetic' ? (
+                                    <div onClick={(e) => e.stopPropagation()}>
+                                      <CreatableInlineDropdown
+                                        options={getOptionsForField('afternoonSnackDiabetic')}
+                                        value={day.afternoonSnackDiabetic}
+                                        onSelect={(val) => updateDailyMealField(day.date, 'afternoonSnackDiabetic', val)}
+                                        onClose={() => setEditingCell(null)}
+                                        placeholder="Digite ou selecione..."
+                                      />
+                                    </div>
+                                  ) : (
+                                    <>
+                                      {day.afternoonSnackDiabetic}
+                                      <Pencil className="w-2 h-2 inline ml-1 opacity-40 no-print" />
+                                    </>
+                                  )}
+                                </span>
                               </div>
                             </div>
                           )}
@@ -989,7 +1105,30 @@ export default function MenuEditorPage({ params }: { params: Params }) {
                               </div>
 
                               <div className="text-[9.5px] leading-tight text-red-800">
-                                Repetir o almoço, porém ½ porção de carboidratos ou caldo de legumes com módulo de fibras( 1 colher de chá)
+                                <span
+                                  className="editable-cell hover:bg-amber-100 rounded px-0.5 inline-block cursor-pointer"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    toggleEdit(day.date, 'dinnerDiabetic');
+                                  }}
+                                >
+                                  {editingCell?.date === day.date && editingCell?.field === 'dinnerDiabetic' ? (
+                                    <div onClick={(e) => e.stopPropagation()}>
+                                      <CreatableInlineDropdown
+                                        options={getOptionsForField('dinnerDiabetic')}
+                                        value={day.dinnerDiabetic}
+                                        onSelect={(val) => updateDailyMealField(day.date, 'dinnerDiabetic', val)}
+                                        onClose={() => setEditingCell(null)}
+                                        placeholder="Digite ou selecione..."
+                                      />
+                                    </div>
+                                  ) : (
+                                    <>
+                                      {day.dinnerDiabetic}
+                                      <Pencil className="w-2 h-2 inline ml-1 opacity-40 no-print" />
+                                    </>
+                                  )}
+                                </span>
                               </div>
                             </div>
                           )}
@@ -1033,7 +1172,31 @@ export default function MenuEditorPage({ params }: { params: Params }) {
                               </div>
 
                               <div className="text-[9.5px] leading-tight text-red-800">
-                                <span className="font-bold">Diabéticos:</span> Mingau de aveia com adoçante ou Escolher 2 opções: Queijo, Ovo, pão integral, banana cozida com canela e farelo de aveia, batata doce, aipim com queijo minas, café com leite e adoçante, Iogurte diet.
+                                <span className="font-bold">Diabéticos:</span>{' '}
+                                <span
+                                  className="editable-cell hover:bg-purple-100 rounded px-0.5 inline-block cursor-pointer"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    toggleEdit(day.date, 'supperDiabetic');
+                                  }}
+                                >
+                                  {editingCell?.date === day.date && editingCell?.field === 'supperDiabetic' ? (
+                                    <div onClick={(e) => e.stopPropagation()}>
+                                      <CreatableInlineDropdown
+                                        options={getOptionsForField('supperDiabetic')}
+                                        value={day.supperDiabetic ?? 'Mingau de aveia com adoçante ou Escolher 2 opções: Queijo, Ovo, pão integral, banana cozida com canela e farelo de aveia, batata doce, aipim com queijo minas, café com leite e adoçante, Iogurte diet.'}
+                                        onSelect={(val) => updateDailyMealField(day.date, 'supperDiabetic', val)}
+                                        onClose={() => setEditingCell(null)}
+                                        placeholder="Digite ou selecione..."
+                                      />
+                                    </div>
+                                  ) : (
+                                    <>
+                                      {day.supperDiabetic ?? 'Mingau de aveia com adoçante ou Escolher 2 opções: Queijo, Ovo, pão integral, banana cozida com canela e farelo de aveia, batata doce, aipim com queijo minas, café com leite e adoçante, Iogurte diet.'}
+                                      <Pencil className="w-2 h-2 inline ml-1 opacity-40 no-print" />
+                                    </>
+                                  )}
+                                </span>
                               </div>
                             </div>
                           )}

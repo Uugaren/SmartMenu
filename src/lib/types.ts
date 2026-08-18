@@ -89,6 +89,8 @@ export interface DailyMeal {
   lunchSide: string; // Arroz + Feijão
   juice: string;
   dessert: string;
+  lunchDiabetic?: string;
+  lunchPastoso?: string;
 
   // Lanche da tarde
   afternoonSnack: string;
@@ -100,6 +102,7 @@ export interface DailyMeal {
 
   // Ceia
   supper: string;
+  supperDiabetic?: string;
 }
 
 export interface GeneratedMenu {
