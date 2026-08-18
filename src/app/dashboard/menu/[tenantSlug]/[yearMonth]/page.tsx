@@ -20,7 +20,7 @@ import {
 import { format, parse } from 'date-fns';
 import { supabase } from '@/lib/supabase';
 import { generateMonthlyMenu, organizeIntoWeeks } from '@/lib/menuGenerator';
-import type { Tenant, Dish, DailyMeal, MonthlyMenu } from '@/lib/types';
+import type { Tenant, Dish, DailyMeal, MonthlyMenu, DishCategory } from '@/lib/types';
 import {
   BREAKFAST_FRUITS,
   JUICES,
@@ -46,9 +46,9 @@ function getTenantLogo(tenant: Tenant | null): string {
 }
 
 // ============================================================================
-// Inline dropdown component for editing ANY menu item
+// Creatable dropdown component for editing ANY menu item with free text input
 // ============================================================================
-function InlineDropdown({
+function CreatableInlineDropdown({
   options,
   value,
   onSelect,
@@ -61,40 +61,125 @@ function InlineDropdown({
   onClose: () => void;
   placeholder?: string;
 }) {
-  const selectRef = useRef<HTMLSelectElement>(null);
+  const containerRef = useRef<HTMLDivElement>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
+  const [query, setQuery] = useState('');
+  const [isOpen, setIsOpen] = useState(true);
 
   useEffect(() => {
     const timer = setTimeout(() => {
-      selectRef.current?.focus();
+      inputRef.current?.focus();
+      inputRef.current?.select();
     }, 50);
     return () => clearTimeout(timer);
   }, []);
 
+  useEffect(() => {
+    function handleClickOutside(event: MouseEvent) {
+      if (containerRef.current && !containerRef.current.contains(event.target as Node)) {
+        onClose();
+      }
+    }
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, [onClose]);
+
+  const filteredOptions = options.filter((opt) =>
+    opt.name.toLowerCase().includes(query.toLowerCase())
+  );
+
+  const trimmedQuery = query.trim();
+  const exactMatch = options.find(
+    (opt) => opt.name.toLowerCase() === trimmedQuery.toLowerCase()
+  );
+
+  const handleConfirm = (selectedValue: string, selectedId?: string) => {
+    if (!selectedValue.trim()) {
+      onClose();
+      return;
+    }
+    onSelect(selectedValue.trim(), selectedId);
+    onClose();
+  };
+
   return (
-    <select
-      ref={selectRef}
-      className="w-full text-[11px] bg-white border-2 border-emerald-500 rounded p-1 focus:outline-none focus:border-emerald-600 shadow-xl cursor-pointer text-slate-900 z-50 relative"
-      value={value ?? ''}
-      onChange={(e) => {
-        e.stopPropagation();
-        const selectedId = e.target.value;
-        const foundOption = options.find((o) => o.id === selectedId || o.name === selectedId);
-        onSelect(foundOption ? foundOption.name : selectedId, foundOption?.id);
-      }}
-      onBlur={() => {
-        setTimeout(onClose, 150);
-      }}
-      onKeyDown={(e) => {
-        if (e.key === 'Escape') onClose();
-      }}
+    <div
+      ref={containerRef}
+      className="relative w-full z-50 text-[11px]"
+      onClick={(e) => e.stopPropagation()}
     >
-      <option value="">{placeholder ?? 'Selecione uma opção...'}</option>
-      {options.map((opt, idx) => (
-        <option key={`${opt.id}-${idx}`} value={opt.id}>
-          {opt.name}
-        </option>
-      ))}
-    </select>
+      <div className="flex items-center bg-white border-2 border-emerald-500 rounded p-1 shadow-xl">
+        <input
+          ref={inputRef}
+          type="text"
+          className="w-full bg-transparent text-slate-900 font-medium focus:outline-none text-[11px]"
+          placeholder={placeholder ?? 'Digite ou selecione...'}
+          value={query}
+          onChange={(e) => {
+            setQuery(e.target.value);
+            setIsOpen(true);
+          }}
+          onKeyDown={(e) => {
+            if (e.key === 'Escape') {
+              onClose();
+            } else if (e.key === 'Enter') {
+              e.preventDefault();
+              if (exactMatch) {
+                handleConfirm(exactMatch.name, exactMatch.id);
+              } else if (trimmedQuery) {
+                handleConfirm(trimmedQuery);
+              } else if (filteredOptions.length > 0) {
+                handleConfirm(filteredOptions[0].name, filteredOptions[0].id);
+              } else {
+                onClose();
+              }
+            }
+          }}
+        />
+      </div>
+
+      {isOpen && (
+        <div className="absolute left-0 right-0 top-full mt-1 max-h-48 overflow-y-auto bg-white border border-slate-300 rounded-md shadow-2xl z-50 py-1 text-[11px]">
+          {trimmedQuery && !exactMatch && (
+            <button
+              type="button"
+              className="w-full text-left px-3 py-1.5 hover:bg-emerald-50 text-emerald-700 font-semibold flex items-center gap-1.5 border-b border-slate-100 cursor-pointer"
+              onMouseDown={(e) => {
+                e.preventDefault();
+                handleConfirm(trimmedQuery);
+              }}
+            >
+              <span className="text-xs">➕</span>
+              <span>Adicionar "{trimmedQuery}"</span>
+            </button>
+          )}
+
+          {filteredOptions.length > 0 ? (
+            filteredOptions.map((opt, idx) => (
+              <button
+                key={`${opt.id}-${idx}`}
+                type="button"
+                className={`w-full text-left px-3 py-1.5 hover:bg-slate-100 text-slate-800 transition-colors cursor-pointer ${
+                  value === opt.id || value === opt.name ? 'bg-emerald-50 text-emerald-800 font-bold' : ''
+                }`}
+                onMouseDown={(e) => {
+                  e.preventDefault();
+                  handleConfirm(opt.name, opt.id);
+                }}
+              >
+                {opt.name}
+              </button>
+            ))
+          ) : (
+            !trimmedQuery && (
+              <div className="px-3 py-2 text-slate-400 italic text-[10px]">
+                Digite para buscar ou adicionar nova opção...
+              </div>
+            )
+          )}
+        </div>
+      )}
+    </div>
   );
 }
 
@@ -178,23 +263,87 @@ export default function MenuEditorPage({ params }: { params: Params }) {
     loadData();
   }, [tenantSlug, yearMonth, year, month, router]);
 
-  // Generic updater for any field of a daily meal
+  // Generic updater for any field of a daily meal, with auto-addition of custom typed options to dropdown & DB
   const updateDailyMealField = useCallback(
     (date: string, field: keyof DailyMeal, value: string, dishId?: string) => {
+      const trimmedVal = value.trim();
+      if (!trimmedVal) return;
+
+      const FIELD_CATEGORY_MAP: Record<keyof DailyMeal, DishCategory> = {
+        colacao: 'cafe',
+        breakfast: 'cafe',
+        breakfastDiabetic: 'cafe',
+        breakfastPastoso: 'cafe',
+        lunchMain: 'prato_principal',
+        lunchSalad: 'salada',
+        lunchSide: 'acompanhamento',
+        juice: 'suco',
+        dessert: 'sobremesa',
+        afternoonSnack: 'lanche',
+        afternoonSnackDiabetic: 'lanche',
+        dinner: 'jantar',
+        dinnerDiabetic: 'jantar',
+        supper: 'ceia',
+        date: 'cafe',
+        dayOfWeek: 'cafe',
+        weekOfMonth: 'cafe',
+        lunchMainDishId: 'prato_principal',
+      };
+
+      const category = FIELD_CATEGORY_MAP[field] || 'prato_principal';
+      const existingDish = dishes.find(
+        (d) => d.name.toLowerCase() === trimmedVal.toLowerCase()
+      );
+
+      let finalDishId = dishId ?? existingDish?.id;
+
+      if (!existingDish && tenant) {
+        const tempId = `custom-${Date.now()}`;
+        const newDishObj: Dish = {
+          id: tempId,
+          tenant_id: tenant.id,
+          category: category,
+          name: trimmedVal,
+          ingredients: null,
+          created_at: new Date().toISOString(),
+        };
+        setDishes((prev) => [newDishObj, ...prev]);
+
+        supabase
+          .from('dishes')
+          .insert({
+            tenant_id: tenant.id,
+            category: category,
+            name: trimmedVal,
+          })
+          .select('*')
+          .single()
+          .then(({ data, error }) => {
+            if (data && !error) {
+              setDishes((prev) => prev.map((d) => (d.id === tempId ? data : d)));
+              if (field === 'lunchMain') {
+                setDays((prevDays) =>
+                  prevDays.map((d) => (d.date === date ? { ...d, lunchMainDishId: data.id } : d))
+                );
+              }
+            }
+          });
+      }
+
       setDays((prev) =>
         prev.map((day) => {
           if (day.date !== date) return day;
 
-          const updated = { ...day, [field]: value };
-          if (field === 'lunchMain' && dishId) {
-            updated.lunchMainDishId = dishId;
+          const updated = { ...day, [field]: trimmedVal };
+          if (field === 'lunchMain' && finalDishId) {
+            updated.lunchMainDishId = finalDishId;
           }
           return updated;
         })
       );
       setEditingCell(null);
     },
-    []
+    [dishes, tenant]
   );
 
   // Save to Supabase
@@ -241,24 +390,21 @@ export default function MenuEditorPage({ params }: { params: Params }) {
   // Filter dishes by categories + fallbacks
   const getOptionsForField = (field: keyof DailyMeal): { id: string; name: string }[] => {
     switch (field) {
-      case 'colacao': {
+      case 'breakfast':
+      case 'colacao':
+      case 'breakfastDiabetic':
+      case 'breakfastPastoso': {
         const dishFruits = dishes.filter((d) => d.category === 'cafe').map((d) => ({ id: d.name, name: d.name }));
-        const defaultFruits = ['Mamão', 'Banana', 'Melão', 'Manga', 'Abacaxi', 'Laranja', 'Mamão picado.', 'Melão.'];
+        const defaultFruits = [
+          'Mamão', 'Banana', 'Melão', 'Manga', 'Abacaxi', 'Laranja',
+          'Pão de forma integral com ovo + Café com leite e adoçante',
+          'Pão integral com queijo minas e manteiga + Café com leite e adoçante',
+          'Mingau rotativo (aveia, tapioca, arroz, fubá) ou Vitamina',
+          'Mingau de aveia ou Vitamina',
+          'Mingau de tapioca ou Vitamina',
+        ];
         const combined = [...dishFruits, ...defaultFruits.map((f) => ({ id: f, name: f }))];
         return Array.from(new Map(combined.map((item) => [item.name, item])).values());
-      }
-      case 'breakfastDiabetic': {
-        return [
-          { id: 'Pão de forma integral com ovo Café com leite e adoçante.', name: 'Pão de forma integral com ovo + Café com leite e adoçante' },
-          { id: 'Pão de forma integral com queijo minas e uma ponta de colher de manteiga Café com leite e adoçante.', name: 'Pão integral com queijo minas e manteiga + Café com leite e adoçante' },
-        ];
-      }
-      case 'breakfastPastoso': {
-        return [
-          { id: 'Mingau de farinha de aveia( diabéticos), farinha de tapioca, farinha de arroz,, vitamina, fubá com aveia.', name: 'Mingau rotativo (aveia, tapioca, arroz, fubá) ou Vitamina' },
-          { id: 'Mingau de aveia ou Vitamina', name: 'Mingau de aveia ou Vitamina' },
-          { id: 'Mingau de tapioca ou Vitamina', name: 'Mingau de tapioca ou Vitamina' },
-        ];
       }
       case 'lunchSide': {
         const sideDishes = dishes.filter((d) => d.category === 'acompanhamento').map((d) => ({ id: d.name, name: d.name }));
@@ -287,7 +433,8 @@ export default function MenuEditorPage({ params }: { params: Params }) {
         const combined = [...dessertDishes, ...defaults.map((f) => ({ id: f, name: f }))];
         return Array.from(new Map(combined.map((item) => [item.name, item])).values());
       }
-      case 'afternoonSnack': {
+      case 'afternoonSnack':
+      case 'afternoonSnackDiabetic': {
         const snackDishes = dishes.filter((d) => d.category === 'lanche').map((d) => ({ id: d.name, name: d.name }));
         const defaults = [
           'Pão francês/doce Café Com Leite.',
@@ -301,7 +448,8 @@ export default function MenuEditorPage({ params }: { params: Params }) {
         const combined = [...snackDishes, ...defaults.map((f) => ({ id: f, name: f }))];
         return Array.from(new Map(combined.map((item) => [item.name, item])).values());
       }
-      case 'dinner': {
+      case 'dinner':
+      case 'dinnerDiabetic': {
         const dinnerDishes = dishes.filter((d) => d.category === 'jantar').map((d) => ({ id: d.name, name: d.name }));
         const defaults = [
           'Sopa de macarrão com legumes e frango desfiado.',
@@ -506,12 +654,12 @@ export default function MenuEditorPage({ params }: { params: Params }) {
                                 >
                                   {editingCell?.date === day.date && editingCell?.field === 'colacao' ? (
                                     <div onClick={(e) => e.stopPropagation()}>
-                                      <InlineDropdown
+                                      <CreatableInlineDropdown
                                         options={getOptionsForField('colacao')}
                                         value={day.colacao}
                                         onSelect={(val) => updateDailyMealField(day.date, 'colacao', val)}
                                         onClose={() => setEditingCell(null)}
-                                        placeholder="Selecione a fruta..."
+                                        placeholder="Digite ou selecione a fruta..."
                                       />
                                     </div>
                                   ) : (
@@ -535,12 +683,12 @@ export default function MenuEditorPage({ params }: { params: Params }) {
                                 >
                                   {editingCell?.date === day.date && editingCell?.field === 'breakfastDiabetic' ? (
                                     <div onClick={(e) => e.stopPropagation()}>
-                                      <InlineDropdown
+                                      <CreatableInlineDropdown
                                         options={getOptionsForField('breakfastDiabetic')}
                                         value={day.breakfastDiabetic}
                                         onSelect={(val) => updateDailyMealField(day.date, 'breakfastDiabetic', val)}
                                         onClose={() => setEditingCell(null)}
-                                        placeholder="Opção diabéticos..."
+                                        placeholder="Digite ou selecione..."
                                       />
                                     </div>
                                   ) : (
@@ -564,12 +712,12 @@ export default function MenuEditorPage({ params }: { params: Params }) {
                                 >
                                   {editingCell?.date === day.date && editingCell?.field === 'breakfastPastoso' ? (
                                     <div onClick={(e) => e.stopPropagation()}>
-                                      <InlineDropdown
+                                      <CreatableInlineDropdown
                                         options={getOptionsForField('breakfastPastoso')}
                                         value={day.breakfastPastoso}
                                         onSelect={(val) => updateDailyMealField(day.date, 'breakfastPastoso', val)}
                                         onClose={() => setEditingCell(null)}
-                                        placeholder="Opção pastosos..."
+                                        placeholder="Digite ou selecione..."
                                       />
                                     </div>
                                   ) : (
@@ -609,12 +757,12 @@ export default function MenuEditorPage({ params }: { params: Params }) {
                                 >
                                   {editingCell?.date === day.date && editingCell?.field === 'lunchSide' ? (
                                     <div onClick={(e) => e.stopPropagation()}>
-                                      <InlineDropdown
+                                      <CreatableInlineDropdown
                                         options={getOptionsForField('lunchSide')}
                                         value={day.lunchSide}
                                         onSelect={(val) => updateDailyMealField(day.date, 'lunchSide', val)}
                                         onClose={() => setEditingCell(null)}
-                                        placeholder="Selecione o acompanhamento..."
+                                        placeholder="Digite ou selecione acompanhamento..."
                                       />
                                     </div>
                                   ) : (
@@ -635,12 +783,12 @@ export default function MenuEditorPage({ params }: { params: Params }) {
                                 >
                                   {editingCell?.date === day.date && editingCell?.field === 'lunchMain' ? (
                                     <div onClick={(e) => e.stopPropagation()}>
-                                      <InlineDropdown
+                                      <CreatableInlineDropdown
                                         options={getOptionsForField('lunchMain')}
                                         value={day.lunchMainDishId}
                                         onSelect={(val, dishId) => updateDailyMealField(day.date, 'lunchMain', val, dishId)}
                                         onClose={() => setEditingCell(null)}
-                                        placeholder="Selecione a proteína..."
+                                        placeholder="Digite ou selecione a proteína..."
                                       />
                                     </div>
                                   ) : (
@@ -661,12 +809,12 @@ export default function MenuEditorPage({ params }: { params: Params }) {
                                 >
                                   {editingCell?.date === day.date && editingCell?.field === 'lunchSalad' ? (
                                     <div onClick={(e) => e.stopPropagation()}>
-                                      <InlineDropdown
+                                      <CreatableInlineDropdown
                                         options={getOptionsForField('lunchSalad')}
                                         value={day.lunchSalad}
                                         onSelect={(val) => updateDailyMealField(day.date, 'lunchSalad', val)}
                                         onClose={() => setEditingCell(null)}
-                                        placeholder="Selecione a salada..."
+                                        placeholder="Digite ou selecione a salada..."
                                       />
                                     </div>
                                   ) : (
@@ -687,12 +835,12 @@ export default function MenuEditorPage({ params }: { params: Params }) {
                                 >
                                   {editingCell?.date === day.date && editingCell?.field === 'juice' ? (
                                     <div onClick={(e) => e.stopPropagation()}>
-                                      <InlineDropdown
+                                      <CreatableInlineDropdown
                                         options={getOptionsForField('juice')}
                                         value={day.juice}
                                         onSelect={(val) => updateDailyMealField(day.date, 'juice', val)}
                                         onClose={() => setEditingCell(null)}
-                                        placeholder="Selecione o suco..."
+                                        placeholder="Digite ou selecione o suco..."
                                       />
                                     </div>
                                   ) : (
@@ -780,12 +928,12 @@ export default function MenuEditorPage({ params }: { params: Params }) {
                               >
                                 {editingCell?.date === day.date && editingCell?.field === 'afternoonSnack' ? (
                                   <div onClick={(e) => e.stopPropagation()}>
-                                    <InlineDropdown
+                                    <CreatableInlineDropdown
                                       options={getOptionsForField('afternoonSnack')}
                                       value={day.afternoonSnack}
                                       onSelect={(val) => updateDailyMealField(day.date, 'afternoonSnack', val)}
                                       onClose={() => setEditingCell(null)}
-                                      placeholder="Selecione o lanche..."
+                                      placeholder="Digite ou selecione o lanche..."
                                     />
                                   </div>
                                 ) : (
@@ -824,12 +972,12 @@ export default function MenuEditorPage({ params }: { params: Params }) {
                               >
                                 {editingCell?.date === day.date && editingCell?.field === 'dinner' ? (
                                   <div onClick={(e) => e.stopPropagation()}>
-                                    <InlineDropdown
+                                    <CreatableInlineDropdown
                                       options={getOptionsForField('dinner')}
                                       value={day.dinner}
                                       onSelect={(val) => updateDailyMealField(day.date, 'dinner', val)}
                                       onClose={() => setEditingCell(null)}
-                                      placeholder="Selecione o jantar..."
+                                      placeholder="Digite ou selecione o jantar..."
                                     />
                                   </div>
                                 ) : (
@@ -868,12 +1016,12 @@ export default function MenuEditorPage({ params }: { params: Params }) {
                               >
                                 {editingCell?.date === day.date && editingCell?.field === 'supper' ? (
                                   <div onClick={(e) => e.stopPropagation()}>
-                                    <InlineDropdown
+                                    <CreatableInlineDropdown
                                       options={getOptionsForField('supper')}
                                       value={day.supper}
                                       onSelect={(val) => updateDailyMealField(day.date, 'supper', val)}
                                       onClose={() => setEditingCell(null)}
-                                      placeholder="Selecione a ceia..."
+                                      placeholder="Digite ou selecione a ceia..."
                                     />
                                   </div>
                                 ) : (
