@@ -42,6 +42,7 @@ function getTenantLogo(tenant: Tenant | null): string {
   if (!tenant) return '/logos/lares.jpg';
   if (tenant.logo_url) return tenant.logo_url;
   if (tenant.slug === 'vida-plena') return '/logos/vida-plena.png';
+  if (tenant.slug === 'vovo-alda') return '/logos/vovo-alda.png';
   return '/logos/lares.jpg';
 }
 
@@ -243,13 +244,27 @@ export default function MenuEditorPage({ params }: { params: Params }) {
         const merged = generated.map((day) => {
           const existing = existingMenus.find((m: MonthlyMenu) => m.date === day.date);
           if (existing) {
+            const mealData = (existing.meal_data || {}) as Partial<DailyMeal>;
             return {
               ...day,
-              lunchMain: existing.lunch_dish?.name ?? day.lunchMain,
-              lunchMainDishId: existing.lunch_dish_id ?? day.lunchMainDishId,
-              lunchSalad: existing.lunch_salad ?? day.lunchSalad,
-              juice: existing.juice ?? day.juice,
-              dessert: existing.dessert_override ?? day.dessert,
+              lunchMain: existing.lunch_dish?.name ?? mealData.lunchMain ?? day.lunchMain,
+              lunchMainDishId: existing.lunch_dish_id ?? mealData.lunchMainDishId ?? day.lunchMainDishId,
+              lunchSalad: existing.lunch_salad ?? mealData.lunchSalad ?? day.lunchSalad,
+              juice: existing.juice ?? mealData.juice ?? day.juice,
+              dessert: existing.dessert_override ?? mealData.dessert ?? day.dessert,
+              breakfast: mealData.breakfast ?? day.breakfast,
+              breakfastDiabetic: mealData.breakfastDiabetic ?? day.breakfastDiabetic,
+              breakfastPastoso: mealData.breakfastPastoso ?? day.breakfastPastoso,
+              colacao: mealData.colacao ?? day.colacao,
+              lunchSide: mealData.lunchSide ?? day.lunchSide,
+              lunchDiabetic: mealData.lunchDiabetic ?? day.lunchDiabetic,
+              lunchPastoso: mealData.lunchPastoso ?? day.lunchPastoso,
+              afternoonSnack: mealData.afternoonSnack ?? day.afternoonSnack,
+              afternoonSnackDiabetic: mealData.afternoonSnackDiabetic ?? day.afternoonSnackDiabetic,
+              dinner: mealData.dinner ?? day.dinner,
+              dinnerDiabetic: mealData.dinnerDiabetic ?? day.dinnerDiabetic,
+              supper: mealData.supper ?? day.supper,
+              supperDiabetic: mealData.supperDiabetic ?? day.supperDiabetic,
             };
           }
           return day;
@@ -361,6 +376,26 @@ export default function MenuEditorPage({ params }: { params: Params }) {
       lunch_salad: day.lunchSalad,
       juice: day.juice,
       dessert_override: day.dessert,
+      meal_data: {
+        breakfast: day.breakfast,
+        breakfastDiabetic: day.breakfastDiabetic,
+        breakfastPastoso: day.breakfastPastoso,
+        colacao: day.colacao,
+        lunchMain: day.lunchMain,
+        lunchMainDishId: day.lunchMainDishId,
+        lunchSalad: day.lunchSalad,
+        lunchSide: day.lunchSide,
+        juice: day.juice,
+        dessert: day.dessert,
+        lunchDiabetic: day.lunchDiabetic,
+        lunchPastoso: day.lunchPastoso,
+        afternoonSnack: day.afternoonSnack,
+        afternoonSnackDiabetic: day.afternoonSnackDiabetic,
+        dinner: day.dinner,
+        dinnerDiabetic: day.dinnerDiabetic,
+        supper: day.supper,
+        supperDiabetic: day.supperDiabetic,
+      },
       notes: null,
     }));
 
@@ -1105,6 +1140,7 @@ export default function MenuEditorPage({ params }: { params: Params }) {
                               </div>
 
                               <div className="text-[9.5px] leading-tight text-red-800">
+                                <span className="font-bold">Diabéticos:</span>{' '}
                                 <span
                                   className="editable-cell hover:bg-amber-100 rounded px-0.5 inline-block cursor-pointer"
                                   onClick={(e) => {
@@ -1124,7 +1160,7 @@ export default function MenuEditorPage({ params }: { params: Params }) {
                                     </div>
                                   ) : (
                                     <>
-                                      {day.dinnerDiabetic}
+                                      {day.dinnerDiabetic || 'Repetir o almoço, porém ½ porção de carboidratos ou caldo de legumes com módulo de fibras( 1 colher de chá)'}
                                       <Pencil className="w-2 h-2 inline ml-1 opacity-40 no-print" />
                                     </>
                                   )}

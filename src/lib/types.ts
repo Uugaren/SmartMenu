@@ -58,6 +58,7 @@ export interface MonthlyMenu {
   lunch_salad: string | null;
   juice: string | null;
   dessert_override: string | null;
+  meal_data?: Partial<DailyMeal> | null;
   notes: string | null;
   created_at: string;
   updated_at: string;

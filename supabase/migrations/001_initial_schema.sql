@@ -54,6 +54,7 @@ CREATE TABLE IF NOT EXISTS monthly_menus (
   lunch_salad TEXT,
   juice TEXT,
   dessert_override TEXT,
+  meal_data JSONB,
   notes TEXT,
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
@@ -93,75 +94,63 @@ CREATE POLICY "menus_all" ON monthly_menus FOR ALL USING (true) WITH CHECK (true
 
 INSERT INTO tenants (name, slug, primary_color, logo_url) VALUES
   ('Lares Casa de Repouso', 'lares', '#059669', '/logos/lares.jpg'),
-  ('Casa de Repouso Vida Plena', 'vida-plena', '#0891B2', '/logos/vida-plena.png');
+  ('Casa de Repouso Vida Plena', 'vida-plena', '#0891B2', '/logos/vida-plena.png'),
+  ('Casa de Repouso Vovó Alda', 'vovo-alda', '#0284c7', '/logos/vovo-alda.png');
 
 -- ============================================================================
--- 4. SEED DATA — PRATOS: LARES CASA DE REPOUSO
--- ============================================================================
-
-INSERT INTO dishes (tenant_id, category, name, ingredients)
-SELECT t.id, 'prato_principal', d.name, d.ingredients
-FROM tenants t
-CROSS JOIN (VALUES
-  ('Escondidinho de Carne Seca', 'Carne seca desfiada, purê de mandioca, queijo gratinado'),
-  ('Strogonoff de Frango', 'Frango em cubos, creme de leite, molho de tomate, champignon'),
-  ('Omelete com Legumes', 'Ovos, cebola, tomate, pimentão, ervilha'),
-  ('Frango Assado', 'Coxa e sobrecoxa, alho, limão, ervas finas'),
-  ('Carne de Panela', 'Carne bovina (acém), cenoura, batata, cebola'),
-  ('Feijoada Light', 'Feijão preto, carne seca, linguiça calabresa, lombo'),
-  ('Peixe Grelhado', 'Filé de tilápia, limão, azeite, ervas'),
-  ('Carne Moída com Purê', 'Carne moída, molho de tomate, batata, leite, manteiga'),
-  ('Macarrão à Bolonhesa', 'Macarrão parafuso, carne moída, molho de tomate, cebola'),
-  ('Frango ao Molho', 'Peito de frango, creme de leite, milho, ervilha'),
-  ('Bife Acebolado', 'Bife bovino, cebola em rodelas, alho, azeite'),
-  ('Lombo Assado', 'Lombo suíno, alho, mostarda, ervas')
-) AS d(name, ingredients)
-WHERE t.slug = 'lares';
-
-INSERT INTO dishes (tenant_id, category, name, ingredients)
-SELECT t.id, 'salada', d.name, d.ingredients
-FROM tenants t
-CROSS JOIN (VALUES
-  ('Alface e Tomate', 'Alface americana, tomate, azeite, sal'),
-  ('Salada de Repolho Roxo', 'Repolho roxo, tomate, azeite'),
-  ('Salada de Alface', 'Alface crespa, azeite, sal')
-) AS d(name, ingredients)
-WHERE t.slug = 'lares';
-
--- ============================================================================
--- 5. SEED DATA — PRATOS: CASA DE REPOUSO VIDA PLENA
+-- 4. SEED DATA — PRATOS: PRATOS REAIS DAS CASAS DE REPOUSO
 -- ============================================================================
 
 INSERT INTO dishes (tenant_id, category, name, ingredients)
 SELECT t.id, 'prato_principal', d.name, d.ingredients
 FROM tenants t
 CROSS JOIN (VALUES
-  ('Bobó de Camarão', 'Camarão, mandioca, leite de coco, azeite de dendê, coentro'),
-  ('Dobradinha', 'Bucho bovino, feijão branco, cenoura, batata, temperos'),
-  ('Cassoulet', 'Linguiça, carne suína, feijão branco, cenoura, ervas'),
-  ('Fricassé de Frango', 'Frango desfiado, creme de leite, milho, azeitona, batata palha'),
-  ('Peixe Empanado', 'Filé de merluza, farinha de rosca, ovo, limão'),
-  ('Filé ao Molho Madeira', 'Filé mignon, molho madeira, champignon, arroz'),
-  ('Bacalhoada', 'Bacalhau, batata, cebola, ovos, azeitonas, azeite'),
-  ('Risoto de Funghi', 'Arroz arbóreo, funghi seco, parmesão, manteiga, vinho branco'),
-  ('Moqueca de Peixe', 'Peixe, leite de coco, pimentão, tomate, azeite de dendê, coentro'),
-  ('Frango à Parmegiana', 'Peito de frango empanado, molho de tomate, queijo, presunto'),
-  ('Carne de Sol', 'Carne de sol desfiada, manteiga de garrafa, cebola, macaxeira'),
-  ('Lagarto Recheado', 'Lagarto bovino, cenoura, ovos, presunto, queijo')
+  ('Escondidinho de Frango', 'Frango desfiado, purê de mandioca/batata, queijo gratinado'),
+  ('Coxa e Sobrecoxa Assada', 'Coxa e sobrecoxa de frango assada com legumes'),
+  ('Músculo Ensopado com Chuchu e Cenoura', 'Músculo bovino cozido com chuchu e cenoura'),
+  ('Peixe Empanado (Cação)', 'Filé de cação empanado e frito'),
+  ('Dobradinha com Feijão Branco', 'Dobradinha cozida com feijão branco e temperos verdes'),
+  ('Acém em Cubos com Batata', 'Acém bovino em cubos ensopado com batatas'),
+  ('Carne de Porco Picadinha', 'Carne suína picadinha com temperos da casa'),
+  ('Escondidinho de Carne Seca', 'Carne seca desfiada com purê de mandioca'),
+  ('Fricassé de Frango', 'Frango desfiado com creme de milho e vagem refogada'),
+  ('Almôndegas ao Molho', 'Almôndegas bovinas ao molho de tomate fresco'),
+  ('Linguiça de Churrasco', 'Linguiça assada acompanhada de purê de batata'),
+  ('Lasanha de Frango com Mussarela', 'Lasanha com recheio de frango e cobertura de mussarela'),
+  ('Sobrecoxa Assada com Feijão Tropeiro', 'Sobrecoxa assada temperada com ervas'),
+  ('Carne de Porco em Cubos Ensopada', 'Carne suína ensopada com tomate e pimentão colorido'),
+  ('Frango com Quiabo e Polenta', 'Frango ensopado com quiabo refogado e polenta'),
+  ('Bife à Pizzaiolo', 'Bife bovino coberto com molho de tomate e queijo com creme de milho'),
+  ('Moqueca de Peixe', 'Peixe cozido no leite de coco com pimentões e vinagrete de lentilha'),
+  ('Strogonoff de Frango', 'Frango em cubos com creme de leite e cogumelos'),
+  ('Paleta em Tiras Pequenas na Pressão', 'Paleta bovina cozida na pressão com suflê de chuchu'),
+  ('Frango Xadrez', 'Peito de frango com pimentão amarelo, cenoura e brócolis'),
+  ('Cassoulet', 'Carne suína e feijão com banana da terra frita'),
+  ('Panqueca de Carne Moída', 'Panqueca recheada com carne moída e molho'),
+  ('Carne Seca com Abóbora', 'Carne seca desfiada refogada com abóbora'),
+  ('Macarronada à Bolonhesa', 'Massa com molho à bolonhesa, azeitona, milho e manjericão'),
+  ('Bobó de Camarão', 'Bobó leve de camarão com abobrinha cozida'),
+  ('Carne Moída com Legumes', 'Carne moída refogada com chuchu e cenoura'),
+  ('Bife Bovino de Panela Acebolado', 'Bife de panela macio com cebola e beringela empanada'),
+  ('Carne Ensopada com Legumes', 'Carne bovina macia ensopada com legumes variados'),
+  ('Omelete de Queijo', 'Omelete de forno com queijo gratinado e maionese')
 ) AS d(name, ingredients)
-WHERE t.slug = 'vida-plena';
+WHERE t.slug IN ('lares', 'vida-plena', 'vovo-alda');
 
 INSERT INTO dishes (tenant_id, category, name, ingredients)
 SELECT t.id, 'salada', d.name, d.ingredients
 FROM tenants t
 CROSS JOIN (VALUES
-  ('Agrião com Melão', 'Agrião, melão em cubos, azeite, limão'),
-  ('Tabule', 'Trigo para quibe, tomate, pepino, hortelã, limão, azeite'),
-  ('Pepino com Rúcula', 'Pepino fatiado, rúcula, azeite, limão, gergelim'),
-  ('Salada Caesar', 'Alface romana, croutons, parmesão, molho caesar'),
-  ('Salada Tropical', 'Mix de folhas, manga, abacaxi, nozes, molho de iogurte')
+  ('Salada de Alface e Tomate', 'Alface crespa, tomate fresco, azeite e sal'),
+  ('Salada de Repolho Roxo e Tomate', 'Repolho roxo, tomate e azeite'),
+  ('Alface e Pepino', 'Alface e pepino fatiado'),
+  ('Salada de Agrião e Pepino', 'Agrião fresco com pepino'),
+  ('Salada de Agrião e Couve', 'Agrião e couve com lâminas de melão'),
+  ('Salada de Folhas', 'Mix de folhas verdes da estação'),
+  ('Salada de Pepino e Rúcula', 'Pepino com rúcula e azeite'),
+  ('Tabule', 'Trigo para quibe, tomate, pepino, hortelã e limão')
 ) AS d(name, ingredients)
-WHERE t.slug = 'vida-plena';
+WHERE t.slug IN ('lares', 'vida-plena', 'vovo-alda');
 
 -- ============================================================================
 -- 6. SEED DATA — REGRAS GLOBAIS

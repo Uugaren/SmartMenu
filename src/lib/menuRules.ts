@@ -123,10 +123,14 @@ export function getAfternoonSnackDiabetic(dayOfWeek: number): string {
 // ============================================================================
 
 export const SOUPS = [
-  'Sopa de Legumes',
-  'Caldo de Inhame c/ Carne',
-  'Sopa de Feijão',
-  'Caldo Verde',
+  'Caldo de abóbora com carne moída',
+  'Caldo de aipim com frango desfiado',
+  'Caldo de inhame com carne moída',
+  'Caldo de feijão com temperos verdes',
+  'Caldo verde',
+  'Sopa de macarrão com legumes e frango desfiado',
+  'Caldo de legumes',
+  'Canjiquinha com frango desfiado',
 ];
 
 export function getDinner(dayIndex: number): string {

@@ -104,9 +104,38 @@ export default function DashboardPage() {
         .select('*')
         .order('name');
 
-      if (tenantData && tenantData.length > 0) {
-        setTenants(tenantData);
-        setSelectedTenant(tenantData[0]);
+      let list = tenantData ?? [];
+      if (!list.find((t) => t.slug === 'vovo-alda')) {
+        const { data: newTenant } = await supabase
+          .from('tenants')
+          .insert({
+            name: 'Casa de Repouso Vovó Alda',
+            slug: 'vovo-alda',
+            primary_color: '#0284c7',
+            logo_url: '/logos/vovo-alda.png',
+          })
+          .select('*')
+          .single();
+        if (newTenant) {
+          list = [...list, newTenant];
+        } else {
+          list = [
+            ...list,
+            {
+              id: 'vovo-alda-id',
+              name: 'Casa de Repouso Vovó Alda',
+              slug: 'vovo-alda',
+              logo_url: '/logos/vovo-alda.png',
+              primary_color: '#0284c7',
+              created_at: new Date().toISOString(),
+            },
+          ];
+        }
+      }
+
+      setTenants(list);
+      if (list.length > 0) {
+        setSelectedTenant(list[0]);
       }
 
       // Fetch Dishes
