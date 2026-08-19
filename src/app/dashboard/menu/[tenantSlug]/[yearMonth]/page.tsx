@@ -16,6 +16,9 @@ import {
   Coffee,
   Sun,
   Moon,
+  GripVertical,
+  ArrowLeftRight,
+  Sparkles,
 } from 'lucide-react';
 import { format, parse } from 'date-fns';
 import { supabase } from '@/lib/supabase';
@@ -44,6 +47,18 @@ function getTenantLogo(tenant: Tenant | null): string {
   if (tenant.slug === 'vida-plena') return '/logos/vida-plena.png';
   if (tenant.slug === 'vovo-alda') return '/logos/vovo-alda.png';
   return '/logos/lares.jpg';
+}
+
+function getFormattedDayName(dateStr: string): string {
+  try {
+    const parsedDate = parse(dateStr, 'yyyy-MM-dd', new Date());
+    const dayOfWeek = parsedDate.getDay();
+    const dayName = DAY_NAMES_FULL[dayOfWeek];
+    const dayNum = format(parsedDate, 'dd/MM');
+    return `${dayName} (${dayNum})`;
+  } catch {
+    return dateStr;
+  }
 }
 
 // ============================================================================
@@ -185,6 +200,74 @@ function CreatableInlineDropdown({
 }
 
 // ============================================================================
+// Draggable Cell wrapper for drag and drop item swap
+// ============================================================================
+function DraggableCell({
+  date,
+  field,
+  value,
+  isEditing,
+  isDragging,
+  isDropTarget,
+  onToggleEdit,
+  onDragStart,
+  onDragEnd,
+  onDragOver,
+  onDragLeave,
+  onDrop,
+  editComponent,
+  children,
+  className = '',
+}: {
+  date: string;
+  field: keyof DailyMeal;
+  value: string;
+  isEditing: boolean;
+  isDragging: boolean;
+  isDropTarget: boolean;
+  onToggleEdit: () => void;
+  onDragStart: (e: React.DragEvent) => void;
+  onDragEnd: () => void;
+  onDragOver: (e: React.DragEvent) => void;
+  onDragLeave: (e: React.DragEvent) => void;
+  onDrop: (e: React.DragEvent) => void;
+  editComponent: React.ReactNode;
+  children: React.ReactNode;
+  className?: string;
+}) {
+  if (isEditing) {
+    return <div onClick={(e) => e.stopPropagation()}>{editComponent}</div>;
+  }
+
+  return (
+    <div
+      draggable={!isEditing}
+      onDragStart={onDragStart}
+      onDragEnd={onDragEnd}
+      onDragOver={onDragOver}
+      onDragLeave={onDragLeave}
+      onDrop={onDrop}
+      onClick={(e) => {
+        e.stopPropagation();
+        onToggleEdit();
+      }}
+      className={`group relative inline-flex items-center gap-1 rounded px-1 py-0.5 transition-all duration-150 cursor-grab active:cursor-grabbing select-none ${
+        isDragging
+          ? 'opacity-30 border-2 border-dashed border-emerald-600 bg-emerald-100 scale-95 shadow-inner'
+          : isDropTarget
+          ? 'bg-amber-200 ring-2 ring-amber-500 scale-[1.03] shadow-md z-20 font-bold border border-amber-600'
+          : 'hover:bg-amber-100/90 hover:shadow-xs'
+      } ${className}`}
+      title="Clique para editar ou arraste para trocar de lugar com outro prato/refeição"
+    >
+      <GripVertical className="w-2.5 h-2.5 text-slate-400 opacity-0 group-hover:opacity-100 transition-opacity shrink-0 no-print" />
+      <span className="truncate">{children}</span>
+      <Pencil className="w-2 h-2 text-slate-400 opacity-0 group-hover:opacity-70 transition-opacity shrink-0 no-print" />
+    </div>
+  );
+}
+
+// ============================================================================
 // Main page component
 // ============================================================================
 export default function MenuEditorPage({ params }: { params: Params }) {
@@ -202,35 +285,40 @@ export default function MenuEditorPage({ params }: { params: Params }) {
   // Field being edited: { date, field }
   const [editingCell, setEditingCell] = useState<{ date: string; field: keyof DailyMeal } | null>(null);
 
+  // Drag & drop state
+  const [dragItem, setDragItem] = useState<{ date: string; field: keyof DailyMeal; value: string } | null>(null);
+  const [dropTarget, setDropTarget] = useState<{ date: string; field: keyof DailyMeal } | null>(null);
+  const [swapToast, setSwapToast] = useState<{ title: string; message: string } | null>(null);
+
   const [year, month] = yearMonth.split('-').map(Number);
   const monthLabel = `${MONTHS[month - 1]} ${year}`;
 
-const DEFAULT_TENANTS_MAP: Record<string, Tenant> = {
-  lares: {
-    id: 'lares-id',
-    name: 'Lares Casa de Repouso',
-    slug: 'lares',
-    logo_url: '/logos/lares.jpg',
-    primary_color: '#059669',
-    created_at: '2026-01-01',
-  },
-  'vida-plena': {
-    id: 'vida-plena-id',
-    name: 'Casa de Repouso Vida Plena',
-    slug: 'vida-plena',
-    logo_url: '/logos/vida-plena.png',
-    primary_color: '#0891B2',
-    created_at: '2026-01-01',
-  },
-  'vovo-alda': {
-    id: 'vovo-alda-id',
-    name: 'Casa de Repouso Vovó Alda',
-    slug: 'vovo-alda',
-    logo_url: '/logos/vovo-alda.png',
-    primary_color: '#0284c7',
-    created_at: '2026-01-01',
-  },
-};
+  const DEFAULT_TENANTS_MAP: Record<string, Tenant> = {
+    lares: {
+      id: 'lares-id',
+      name: 'Lares Casa de Repouso',
+      slug: 'lares',
+      logo_url: '/logos/lares.jpg',
+      primary_color: '#059669',
+      created_at: '2026-01-01',
+    },
+    'vida-plena': {
+      id: 'vida-plena-id',
+      name: 'Casa de Repouso Vida Plena',
+      slug: 'vida-plena',
+      logo_url: '/logos/vida-plena.png',
+      primary_color: '#0891B2',
+      created_at: '2026-01-01',
+    },
+    'vovo-alda': {
+      id: 'vovo-alda-id',
+      name: 'Casa de Repouso Vovó Alda',
+      slug: 'vovo-alda',
+      logo_url: '/logos/vovo-alda.png',
+      primary_color: '#0284c7',
+      created_at: '2026-01-01',
+    },
+  };
 
   // Load tenant + dishes + existing menus
   useEffect(() => {
@@ -332,7 +420,7 @@ const DEFAULT_TENANTS_MAP: Record<string, Tenant> = {
     loadData();
   }, [tenantSlug, yearMonth, year, month, router]);
 
-  // Generic updater for any field of a daily meal, with auto-addition of custom typed options to dropdown & DB
+  // Generic updater for any field of a daily meal
   const updateDailyMealField = useCallback(
     (date: string, field: keyof DailyMeal, value: string, dishId?: string) => {
       const trimmedVal = value.trim();
@@ -416,6 +504,130 @@ const DEFAULT_TENANTS_MAP: Record<string, Tenant> = {
       setEditingCell(null);
     },
     [dishes, tenant]
+  );
+
+  // Drag and Drop event handlers
+  const handleDragStart = useCallback(
+    (date: string, field: keyof DailyMeal, value: string, e: React.DragEvent) => {
+      setDragItem({ date, field, value });
+      try {
+        e.dataTransfer.setData('text/plain', JSON.stringify({ date, field, value }));
+        e.dataTransfer.effectAllowed = 'move';
+      } catch {
+        // ignore
+      }
+    },
+    []
+  );
+
+  const handleDragEnd = useCallback(() => {
+    setDragItem(null);
+    setDropTarget(null);
+  }, []);
+
+  const handleDragOver = useCallback(
+    (date: string, field: keyof DailyMeal, e: React.DragEvent) => {
+      e.preventDefault();
+      try {
+        e.dataTransfer.dropEffect = 'move';
+      } catch {
+        // ignore
+      }
+      setDropTarget((prev) => {
+        if (prev?.date === date && prev?.field === field) return prev;
+        return { date, field };
+      });
+    },
+    []
+  );
+
+  const handleDragLeave = useCallback(
+    (date: string, field: keyof DailyMeal, e: React.DragEvent) => {
+      e.preventDefault();
+      setDropTarget((prev) => {
+        if (prev?.date === date && prev?.field === field) return null;
+        return prev;
+      });
+    },
+    []
+  );
+
+  const handleDrop = useCallback(
+    (targetDate: string, targetField: keyof DailyMeal, e: React.DragEvent) => {
+      e.preventDefault();
+      e.stopPropagation();
+
+      let source = dragItem;
+      if (!source) {
+        try {
+          const dataStr = e.dataTransfer.getData('text/plain');
+          if (dataStr) {
+            source = JSON.parse(dataStr);
+          }
+        } catch {
+          // ignore
+        }
+      }
+
+      if (source && (source.date !== targetDate || source.field !== targetField)) {
+        const sourceDate = source.date;
+        const sourceField = source.field;
+
+        const sourceDay = days.find((d) => d.date === sourceDate);
+        const targetDay = days.find((d) => d.date === targetDate);
+
+        if (sourceDay && targetDay) {
+          const sourceValue = (sourceDay[sourceField] as string) || '';
+          const targetValue = (targetDay[targetField] as string) || '';
+
+          const sourceDishId = sourceDay.lunchMainDishId;
+          const targetDishId = targetDay.lunchMainDishId;
+
+          setDays((prevDays) =>
+            prevDays.map((day) => {
+              if (day.date === sourceDate && day.date === targetDate) {
+                const updated = {
+                  ...day,
+                  [sourceField]: targetValue,
+                  [targetField]: sourceValue,
+                };
+                if (sourceField === 'lunchMain') updated.lunchMainDishId = targetDishId;
+                if (targetField === 'lunchMain') updated.lunchMainDishId = sourceDishId;
+                return updated;
+              }
+              if (day.date === sourceDate) {
+                const updated = { ...day, [sourceField]: targetValue };
+                if (sourceField === 'lunchMain') {
+                  updated.lunchMainDishId = targetField === 'lunchMain' ? targetDishId : null;
+                }
+                return updated;
+              }
+              if (day.date === targetDate) {
+                const updated = { ...day, [targetField]: sourceValue };
+                if (targetField === 'lunchMain') {
+                  updated.lunchMainDishId = sourceField === 'lunchMain' ? sourceDishId : null;
+                }
+                return updated;
+              }
+              return day;
+            })
+          );
+
+          const sourceDayLabel = getFormattedDayName(sourceDate);
+          const targetDayLabel = getFormattedDayName(targetDate);
+
+          setSwapToast({
+            title: 'Pratos trocados de lugar! 🔄',
+            message: `"${sourceValue}" [${sourceDayLabel}] ↔ "${targetValue}" [${targetDayLabel}]`,
+          });
+          setTimeout(() => setSwapToast(null), 4000);
+        }
+      }
+
+      setDragItem(null);
+      setDropTarget(null);
+    },
+    [dragItem, days]
   );
 
   // Save to Supabase
@@ -620,9 +832,30 @@ const DEFAULT_TENANTS_MAP: Record<string, Tenant> = {
 
   return (
     <div
-      className="min-h-screen tenant-themed bg-slate-100 pb-12"
+      className="min-h-screen tenant-themed bg-slate-100 pb-12 relative"
       style={{ '--tenant-color': tenant.primary_color } as React.CSSProperties}
     >
+      {/* Floating toast notification for swap feedback */}
+      {swapToast && (
+        <div className="no-print fixed bottom-6 right-6 z-50 bg-slate-900 text-white px-4 py-3 rounded-xl shadow-2xl border border-slate-700 animate-slide-up flex items-center gap-3 max-w-md">
+          <div className="w-8 h-8 rounded-full bg-emerald-500/20 text-emerald-400 flex items-center justify-center shrink-0">
+            <ArrowLeftRight className="w-4 h-4" />
+          </div>
+          <div>
+            <h4 className="font-bold text-xs text-emerald-400">{swapToast.title}</h4>
+            <p className="text-xs text-slate-200 mt-0.5">{swapToast.message}</p>
+          </div>
+        </div>
+      )}
+
+      {/* Floating active drag indicator */}
+      {dragItem && (
+        <div className="no-print fixed top-16 left-1/2 -translate-x-1/2 z-50 bg-amber-500 text-slate-950 text-xs font-bold px-4 py-2 rounded-full shadow-lg border border-amber-300 animate-pulse flex items-center gap-2 pointer-events-none">
+          <GripVertical className="w-4 h-4" />
+          <span>Solte sobre outro prato/dia para trocar de lugar com "{dragItem.value}"</span>
+        </div>
+      )}
+
       {/* =================== SCREEN HEADER =================== */}
       <header className="no-print border-b border-border bg-white/90 backdrop-blur-md sticky top-0 z-50 shadow-sm">
         <div className="max-w-[1600px] mx-auto px-4 py-3 flex items-center justify-between">
@@ -685,11 +918,13 @@ const DEFAULT_TENANTS_MAP: Record<string, Tenant> = {
 
       {/* Info Banner on screen */}
       <div className="no-print max-w-[1500px] mx-auto px-4 pt-4">
-        <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-3 text-xs text-emerald-900 flex items-center gap-2 shadow-sm">
-          <Pencil className="w-4 h-4 text-emerald-600 shrink-0" />
-          <span>
-            <strong>Edição interativa total:</strong> Clique em <em>qualquer</em> item do cardápio (frutas, proteína, acompanhamento, salada, suco, sobremesa, lanche, jantar, ceia) para abrir o dropdown de alteração.
-          </span>
+        <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-3 text-xs text-emerald-900 flex items-center justify-between shadow-sm">
+          <div className="flex items-center gap-2">
+            <Sparkles className="w-4 h-4 text-emerald-600 shrink-0" />
+            <span>
+              <strong>Drag & Drop Interativo:</strong> Arraste e solte qualquer item do cardápio (ex: <em>Filé Empanado na Segunda ↔ Bife a Cavalo na Quarta</em>) para trocar de lugar. Clique para editar o texto.
+            </span>
+          </div>
         </div>
       </div>
 
@@ -757,98 +992,109 @@ const DEFAULT_TENANTS_MAP: Record<string, Tenant> = {
                           {day && (
                             <div className="space-y-2">
                               {/* Main Breakfast & Fruit Dropdown */}
-                              <div className="text-[11px] leading-tight">
-                                <span
-                                  className="editable-cell cursor-pointer hover:bg-amber-100 rounded px-0.5 inline-block"
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    toggleEdit(day.date, 'breakfast');
-                                  }}
+                              <div className="text-[11px] leading-tight flex flex-wrap items-center gap-1">
+                                <DraggableCell
+                                  date={day.date}
+                                  field="breakfast"
+                                  value={day.breakfast || 'Pão francês/Doce com manteiga Café com leite'}
+                                  isEditing={editingCell?.date === day.date && editingCell?.field === 'breakfast'}
+                                  isDragging={dragItem?.date === day.date && dragItem?.field === 'breakfast'}
+                                  isDropTarget={dropTarget?.date === day.date && dropTarget?.field === 'breakfast'}
+                                  onToggleEdit={() => toggleEdit(day.date, 'breakfast')}
+                                  onDragStart={(e) => handleDragStart(day.date, 'breakfast', day.breakfast || 'Pão francês/Doce com manteiga Café com leite', e)}
+                                  onDragEnd={handleDragEnd}
+                                  onDragOver={(e) => handleDragOver(day.date, 'breakfast', e)}
+                                  onDragLeave={(e) => handleDragLeave(day.date, 'breakfast', e)}
+                                  onDrop={(e) => handleDrop(day.date, 'breakfast', e)}
+                                  editComponent={
+                                    <CreatableInlineDropdown
+                                      options={getOptionsForField('breakfast')}
+                                      value={day.breakfast}
+                                      onSelect={(val) => updateDailyMealField(day.date, 'breakfast', val)}
+                                      onClose={() => setEditingCell(null)}
+                                      placeholder="Digite ou selecione o café..."
+                                    />
+                                  }
                                 >
-                                  {editingCell?.date === day.date && editingCell?.field === 'breakfast' ? (
-                                    <div onClick={(e) => e.stopPropagation()}>
-                                      <CreatableInlineDropdown
-                                        options={getOptionsForField('breakfast')}
-                                        value={day.breakfast}
-                                        onSelect={(val) => updateDailyMealField(day.date, 'breakfast', val)}
-                                        onClose={() => setEditingCell(null)}
-                                        placeholder="Digite ou selecione o café..."
-                                      />
-                                    </div>
-                                  ) : (
-                                    <>
-                                      {day.breakfast || 'Pão francês/Doce com manteiga Café com leite'}
-                                      <Pencil className="w-2.5 h-2.5 inline ml-1 opacity-40 no-print" />
-                                    </>
-                                  )}
-                                </span>{' '}
-                                <span
-                                  className="editable-cell text-amber-700 font-bold px-0.5 py-0.2 rounded hover:bg-amber-100 transition-colors inline-block"
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    toggleEdit(day.date, 'colacao');
-                                  }}
+                                  {day.breakfast || 'Pão francês/Doce com manteiga Café com leite'}
+                                </DraggableCell>
+
+                                <DraggableCell
+                                  date={day.date}
+                                  field="colacao"
+                                  value={day.colacao}
+                                  isEditing={editingCell?.date === day.date && editingCell?.field === 'colacao'}
+                                  isDragging={dragItem?.date === day.date && dragItem?.field === 'colacao'}
+                                  isDropTarget={dropTarget?.date === day.date && dropTarget?.field === 'colacao'}
+                                  onToggleEdit={() => toggleEdit(day.date, 'colacao')}
+                                  onDragStart={(e) => handleDragStart(day.date, 'colacao', day.colacao, e)}
+                                  onDragEnd={handleDragEnd}
+                                  onDragOver={(e) => handleDragOver(day.date, 'colacao', e)}
+                                  onDragLeave={(e) => handleDragLeave(day.date, 'colacao', e)}
+                                  onDrop={(e) => handleDrop(day.date, 'colacao', e)}
+                                  className="text-amber-700 font-bold"
+                                  editComponent={
+                                    <CreatableInlineDropdown
+                                      options={getOptionsForField('colacao')}
+                                      value={day.colacao}
+                                      onSelect={(val) => updateDailyMealField(day.date, 'colacao', val)}
+                                      onClose={() => setEditingCell(null)}
+                                      placeholder="Digite ou selecione a fruta..."
+                                    />
+                                  }
                                 >
-                                  {editingCell?.date === day.date && editingCell?.field === 'colacao' ? (
-                                    <div onClick={(e) => e.stopPropagation()}>
-                                      <CreatableInlineDropdown
-                                        options={getOptionsForField('colacao')}
-                                        value={day.colacao}
-                                        onSelect={(val) => updateDailyMealField(day.date, 'colacao', val)}
-                                        onClose={() => setEditingCell(null)}
-                                        placeholder="Digite ou selecione a fruta..."
-                                      />
-                                    </div>
-                                  ) : (
-                                    <>
-                                      {day.colacao}.
-                                      <Pencil className="w-2.5 h-2.5 inline ml-1 opacity-40 no-print" />
-                                    </>
-                                  )}
-                                </span>
+                                  {day.colacao}.
+                                </DraggableCell>
                               </div>
 
                               {/* Diabéticos Note Dropdown */}
-                              <div className="text-[10px] leading-tight text-red-800">
-                                <span className="font-bold">Diabéticos:</span>{' '}
-                                <span
-                                  className="editable-cell hover:bg-red-100 rounded px-0.5 inline-block cursor-pointer"
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    toggleEdit(day.date, 'breakfastDiabetic');
-                                  }}
+                              <div className="text-[10px] leading-tight text-red-800 flex items-center gap-1">
+                                <span className="font-bold shrink-0">Diabéticos:</span>
+                                <DraggableCell
+                                  date={day.date}
+                                  field="breakfastDiabetic"
+                                  value={day.breakfastDiabetic}
+                                  isEditing={editingCell?.date === day.date && editingCell?.field === 'breakfastDiabetic'}
+                                  isDragging={dragItem?.date === day.date && dragItem?.field === 'breakfastDiabetic'}
+                                  isDropTarget={dropTarget?.date === day.date && dropTarget?.field === 'breakfastDiabetic'}
+                                  onToggleEdit={() => toggleEdit(day.date, 'breakfastDiabetic')}
+                                  onDragStart={(e) => handleDragStart(day.date, 'breakfastDiabetic', day.breakfastDiabetic, e)}
+                                  onDragEnd={handleDragEnd}
+                                  onDragOver={(e) => handleDragOver(day.date, 'breakfastDiabetic', e)}
+                                  onDragLeave={(e) => handleDragLeave(day.date, 'breakfastDiabetic', e)}
+                                  onDrop={(e) => handleDrop(day.date, 'breakfastDiabetic', e)}
+                                  editComponent={
+                                    <CreatableInlineDropdown
+                                      options={getOptionsForField('breakfastDiabetic')}
+                                      value={day.breakfastDiabetic}
+                                      onSelect={(val) => updateDailyMealField(day.date, 'breakfastDiabetic', val)}
+                                      onClose={() => setEditingCell(null)}
+                                      placeholder="Digite ou selecione..."
+                                    />
+                                  }
                                 >
-                                  {editingCell?.date === day.date && editingCell?.field === 'breakfastDiabetic' ? (
-                                    <div onClick={(e) => e.stopPropagation()}>
-                                      <CreatableInlineDropdown
-                                        options={getOptionsForField('breakfastDiabetic')}
-                                        value={day.breakfastDiabetic}
-                                        onSelect={(val) => updateDailyMealField(day.date, 'breakfastDiabetic', val)}
-                                        onClose={() => setEditingCell(null)}
-                                        placeholder="Digite ou selecione..."
-                                      />
-                                    </div>
-                                  ) : (
-                                    <>
-                                      {day.breakfastDiabetic}
-                                      <Pencil className="w-2 h-2 inline ml-1 opacity-40 no-print" />
-                                    </>
-                                  )}
-                                </span>
+                                  {day.breakfastDiabetic}
+                                </DraggableCell>
                               </div>
 
                               {/* Pastosos Note Dropdown */}
                               <div className="text-[10px] leading-tight text-red-900">
-                                <span className="font-bold">PASTOSOS:</span>{' '}
-                                <span
-                                  className="editable-cell hover:bg-red-100 rounded px-0.5 inline-block cursor-pointer"
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    toggleEdit(day.date, 'breakfastPastoso');
-                                  }}
-                                >
-                                  {editingCell?.date === day.date && editingCell?.field === 'breakfastPastoso' ? (
-                                    <div onClick={(e) => e.stopPropagation()}>
+                                <div className="flex items-center gap-1">
+                                  <span className="font-bold shrink-0">PASTOSOS:</span>
+                                  <DraggableCell
+                                    date={day.date}
+                                    field="breakfastPastoso"
+                                    value={day.breakfastPastoso}
+                                    isEditing={editingCell?.date === day.date && editingCell?.field === 'breakfastPastoso'}
+                                    isDragging={dragItem?.date === day.date && dragItem?.field === 'breakfastPastoso'}
+                                    isDropTarget={dropTarget?.date === day.date && dropTarget?.field === 'breakfastPastoso'}
+                                    onToggleEdit={() => toggleEdit(day.date, 'breakfastPastoso')}
+                                    onDragStart={(e) => handleDragStart(day.date, 'breakfastPastoso', day.breakfastPastoso, e)}
+                                    onDragEnd={handleDragEnd}
+                                    onDragOver={(e) => handleDragOver(day.date, 'breakfastPastoso', e)}
+                                    onDragLeave={(e) => handleDragLeave(day.date, 'breakfastPastoso', e)}
+                                    onDrop={(e) => handleDrop(day.date, 'breakfastPastoso', e)}
+                                    editComponent={
                                       <CreatableInlineDropdown
                                         options={getOptionsForField('breakfastPastoso')}
                                         value={day.breakfastPastoso}
@@ -856,14 +1102,11 @@ const DEFAULT_TENANTS_MAP: Record<string, Tenant> = {
                                         onClose={() => setEditingCell(null)}
                                         placeholder="Digite ou selecione..."
                                       />
-                                    </div>
-                                  ) : (
-                                    <>
-                                      {day.breakfastPastoso}
-                                      <Pencil className="w-2 h-2 inline ml-1 opacity-40 no-print" />
-                                    </>
-                                  )}
-                                </span>{' '}
+                                    }
+                                  >
+                                    {day.breakfastPastoso}
+                                  </DraggableCell>
+                                </div>
                                 <span className="font-bold uppercase text-[9px] block mt-0.5">
                                   ( FAZER PARA LANCHE DA TARDE TAMBÉM)
                                 </span>
@@ -885,15 +1128,21 @@ const DEFAULT_TENANTS_MAP: Record<string, Tenant> = {
                             <div className="space-y-2">
                               <div className="text-[11px] leading-tight space-y-1">
                                 {/* Editable Lunch Side */}
-                                <div
-                                  className="editable-cell p-0.5 rounded -mx-0.5"
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    toggleEdit(day.date, 'lunchSide');
-                                  }}
-                                >
-                                  {editingCell?.date === day.date && editingCell?.field === 'lunchSide' ? (
-                                    <div onClick={(e) => e.stopPropagation()}>
+                                <div>
+                                  <DraggableCell
+                                    date={day.date}
+                                    field="lunchSide"
+                                    value={day.lunchSide}
+                                    isEditing={editingCell?.date === day.date && editingCell?.field === 'lunchSide'}
+                                    isDragging={dragItem?.date === day.date && dragItem?.field === 'lunchSide'}
+                                    isDropTarget={dropTarget?.date === day.date && dropTarget?.field === 'lunchSide'}
+                                    onToggleEdit={() => toggleEdit(day.date, 'lunchSide')}
+                                    onDragStart={(e) => handleDragStart(day.date, 'lunchSide', day.lunchSide, e)}
+                                    onDragEnd={handleDragEnd}
+                                    onDragOver={(e) => handleDragOver(day.date, 'lunchSide', e)}
+                                    onDragLeave={(e) => handleDragLeave(day.date, 'lunchSide', e)}
+                                    onDrop={(e) => handleDrop(day.date, 'lunchSide', e)}
+                                    editComponent={
                                       <CreatableInlineDropdown
                                         options={getOptionsForField('lunchSide')}
                                         value={day.lunchSide}
@@ -901,25 +1150,29 @@ const DEFAULT_TENANTS_MAP: Record<string, Tenant> = {
                                         onClose={() => setEditingCell(null)}
                                         placeholder="Digite ou selecione acompanhamento..."
                                       />
-                                    </div>
-                                  ) : (
-                                    <span className="cursor-pointer hover:bg-emerald-100 rounded px-0.5 transition-colors inline-block">
-                                      {day.lunchSide};
-                                      <Pencil className="w-2.5 h-2.5 inline ml-1 opacity-40 no-print" />
-                                    </span>
-                                  )}
+                                    }
+                                  >
+                                    {day.lunchSide};
+                                  </DraggableCell>
                                 </div>
 
-                                {/* Editable Protein */}
-                                <div
-                                  className="editable-cell p-0.5 rounded -mx-0.5"
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    toggleEdit(day.date, 'lunchMain');
-                                  }}
-                                >
-                                  {editingCell?.date === day.date && editingCell?.field === 'lunchMain' ? (
-                                    <div onClick={(e) => e.stopPropagation()}>
+                                {/* Editable Protein (Main Dish e.g. Filé Empanado / Bife a Cavalo) */}
+                                <div>
+                                  <DraggableCell
+                                    date={day.date}
+                                    field="lunchMain"
+                                    value={day.lunchMain}
+                                    isEditing={editingCell?.date === day.date && editingCell?.field === 'lunchMain'}
+                                    isDragging={dragItem?.date === day.date && dragItem?.field === 'lunchMain'}
+                                    isDropTarget={dropTarget?.date === day.date && dropTarget?.field === 'lunchMain'}
+                                    onToggleEdit={() => toggleEdit(day.date, 'lunchMain')}
+                                    onDragStart={(e) => handleDragStart(day.date, 'lunchMain', day.lunchMain, e)}
+                                    onDragEnd={handleDragEnd}
+                                    onDragOver={(e) => handleDragOver(day.date, 'lunchMain', e)}
+                                    onDragLeave={(e) => handleDragLeave(day.date, 'lunchMain', e)}
+                                    onDrop={(e) => handleDrop(day.date, 'lunchMain', e)}
+                                    className="font-bold uppercase text-black"
+                                    editComponent={
                                       <CreatableInlineDropdown
                                         options={getOptionsForField('lunchMain')}
                                         value={day.lunchMainDishId}
@@ -927,25 +1180,28 @@ const DEFAULT_TENANTS_MAP: Record<string, Tenant> = {
                                         onClose={() => setEditingCell(null)}
                                         placeholder="Digite ou selecione a proteína..."
                                       />
-                                    </div>
-                                  ) : (
-                                    <span className="font-bold uppercase text-black cursor-pointer hover:bg-amber-100 rounded px-0.5 transition-colors inline-block">
-                                      {day.lunchMain}
-                                      <Pencil className="w-2.5 h-2.5 inline ml-1 opacity-40 no-print" />
-                                    </span>
-                                  )}
+                                    }
+                                  >
+                                    {day.lunchMain}
+                                  </DraggableCell>
                                 </div>
 
                                 {/* Editable Salad */}
-                                <div
-                                  className="editable-cell p-0.5 rounded -mx-0.5"
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    toggleEdit(day.date, 'lunchSalad');
-                                  }}
-                                >
-                                  {editingCell?.date === day.date && editingCell?.field === 'lunchSalad' ? (
-                                    <div onClick={(e) => e.stopPropagation()}>
+                                <div>
+                                  <DraggableCell
+                                    date={day.date}
+                                    field="lunchSalad"
+                                    value={day.lunchSalad}
+                                    isEditing={editingCell?.date === day.date && editingCell?.field === 'lunchSalad'}
+                                    isDragging={dragItem?.date === day.date && dragItem?.field === 'lunchSalad'}
+                                    isDropTarget={dropTarget?.date === day.date && dropTarget?.field === 'lunchSalad'}
+                                    onToggleEdit={() => toggleEdit(day.date, 'lunchSalad')}
+                                    onDragStart={(e) => handleDragStart(day.date, 'lunchSalad', day.lunchSalad, e)}
+                                    onDragEnd={handleDragEnd}
+                                    onDragOver={(e) => handleDragOver(day.date, 'lunchSalad', e)}
+                                    onDragLeave={(e) => handleDragLeave(day.date, 'lunchSalad', e)}
+                                    onDrop={(e) => handleDrop(day.date, 'lunchSalad', e)}
+                                    editComponent={
                                       <CreatableInlineDropdown
                                         options={getOptionsForField('lunchSalad')}
                                         value={day.lunchSalad}
@@ -953,25 +1209,30 @@ const DEFAULT_TENANTS_MAP: Record<string, Tenant> = {
                                         onClose={() => setEditingCell(null)}
                                         placeholder="Digite ou selecione a salada..."
                                       />
-                                    </div>
-                                  ) : (
-                                    <span className="cursor-pointer hover:bg-green-100 rounded px-0.5 transition-colors inline-block">
-                                      {day.lunchSalad}
-                                      <Salad className="w-2.5 h-2.5 inline ml-1 opacity-40 no-print" />
-                                    </span>
-                                  )}
+                                    }
+                                  >
+                                    {day.lunchSalad}
+                                    <Salad className="w-2.5 h-2.5 inline ml-1 opacity-40 no-print" />
+                                  </DraggableCell>
                                 </div>
 
                                 {/* Editable Juice */}
-                                <div
-                                  className="editable-cell p-0.5 rounded -mx-0.5"
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    toggleEdit(day.date, 'juice');
-                                  }}
-                                >
-                                  {editingCell?.date === day.date && editingCell?.field === 'juice' ? (
-                                    <div onClick={(e) => e.stopPropagation()}>
+                                <div>
+                                  <DraggableCell
+                                    date={day.date}
+                                    field="juice"
+                                    value={day.juice}
+                                    isEditing={editingCell?.date === day.date && editingCell?.field === 'juice'}
+                                    isDragging={dragItem?.date === day.date && dragItem?.field === 'juice'}
+                                    isDropTarget={dropTarget?.date === day.date && dropTarget?.field === 'juice'}
+                                    onToggleEdit={() => toggleEdit(day.date, 'juice')}
+                                    onDragStart={(e) => handleDragStart(day.date, 'juice', day.juice, e)}
+                                    onDragEnd={handleDragEnd}
+                                    onDragOver={(e) => handleDragOver(day.date, 'juice', e)}
+                                    onDragLeave={(e) => handleDragLeave(day.date, 'juice', e)}
+                                    onDrop={(e) => handleDrop(day.date, 'juice', e)}
+                                    className="text-slate-800"
+                                    editComponent={
                                       <CreatableInlineDropdown
                                         options={getOptionsForField('juice')}
                                         value={day.juice}
@@ -979,28 +1240,31 @@ const DEFAULT_TENANTS_MAP: Record<string, Tenant> = {
                                         onClose={() => setEditingCell(null)}
                                         placeholder="Digite ou selecione o suco..."
                                       />
-                                    </div>
-                                  ) : (
-                                    <span className="text-slate-800 cursor-pointer hover:bg-yellow-100 rounded px-0.5 transition-colors inline-block">
-                                      {day.juice}
-                                      <Pencil className="w-2.5 h-2.5 inline ml-1 opacity-40 no-print" />
-                                    </span>
-                                  )}
+                                    }
+                                  >
+                                    {day.juice}
+                                  </DraggableCell>
                                 </div>
                               </div>
 
                               {/* Diabéticos & Pastosos notes */}
                               <div className="pt-1 border-t border-slate-200 text-[9.5px] leading-tight text-slate-700 space-y-1">
-                                <div
-                                  className="editable-cell cursor-pointer hover:bg-red-50 rounded px-0.5"
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    toggleEdit(day.date, 'lunchDiabetic');
-                                  }}
-                                >
-                                  <span className="font-bold text-red-800">Diabéticos:</span>{' '}
-                                  {editingCell?.date === day.date && editingCell?.field === 'lunchDiabetic' ? (
-                                    <div onClick={(e) => e.stopPropagation()}>
+                                <div className="flex items-center gap-1">
+                                  <span className="font-bold text-red-800 shrink-0">Diabéticos:</span>
+                                  <DraggableCell
+                                    date={day.date}
+                                    field="lunchDiabetic"
+                                    value={day.lunchDiabetic ?? 'Colocar mais folhas cruas ½ porção de cada carboidratos, se houver mais de 1 opção.'}
+                                    isEditing={editingCell?.date === day.date && editingCell?.field === 'lunchDiabetic'}
+                                    isDragging={dragItem?.date === day.date && dragItem?.field === 'lunchDiabetic'}
+                                    isDropTarget={dropTarget?.date === day.date && dropTarget?.field === 'lunchDiabetic'}
+                                    onToggleEdit={() => toggleEdit(day.date, 'lunchDiabetic')}
+                                    onDragStart={(e) => handleDragStart(day.date, 'lunchDiabetic', day.lunchDiabetic ?? 'Colocar mais folhas cruas...', e)}
+                                    onDragEnd={handleDragEnd}
+                                    onDragOver={(e) => handleDragOver(day.date, 'lunchDiabetic', e)}
+                                    onDragLeave={(e) => handleDragLeave(day.date, 'lunchDiabetic', e)}
+                                    onDrop={(e) => handleDrop(day.date, 'lunchDiabetic', e)}
+                                    editComponent={
                                       <CreatableInlineDropdown
                                         options={getOptionsForField('lunchDiabetic')}
                                         value={day.lunchDiabetic ?? 'Colocar mais folhas cruas ½ porção de cada carboidratos, se houver mais de 1 opção.'}
@@ -1008,24 +1272,28 @@ const DEFAULT_TENANTS_MAP: Record<string, Tenant> = {
                                         onClose={() => setEditingCell(null)}
                                         placeholder="Digite ou selecione..."
                                       />
-                                    </div>
-                                  ) : (
-                                    <>
-                                      {day.lunchDiabetic ?? 'Colocar mais folhas cruas ½ porção de cada carboidratos, se houver mais de 1 opção.'}
-                                      <Pencil className="w-2 h-2 inline ml-1 opacity-40 no-print" />
-                                    </>
-                                  )}
+                                    }
+                                  >
+                                    {day.lunchDiabetic ?? 'Colocar mais folhas cruas ½ porção de cada carboidratos, se houver mais de 1 opção.'}
+                                  </DraggableCell>
                                 </div>
-                                <div
-                                  className="editable-cell cursor-pointer hover:bg-red-50 rounded px-0.5"
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    toggleEdit(day.date, 'lunchPastoso');
-                                  }}
-                                >
-                                  <span className="font-bold text-red-900">Pastoso:</span>{' '}
-                                  {editingCell?.date === day.date && editingCell?.field === 'lunchPastoso' ? (
-                                    <div onClick={(e) => e.stopPropagation()}>
+
+                                <div className="flex items-center gap-1">
+                                  <span className="font-bold text-red-900 shrink-0">Pastoso:</span>
+                                  <DraggableCell
+                                    date={day.date}
+                                    field="lunchPastoso"
+                                    value={day.lunchPastoso ?? 'colocar módulo de fibras (1 colher de chá)'}
+                                    isEditing={editingCell?.date === day.date && editingCell?.field === 'lunchPastoso'}
+                                    isDragging={dragItem?.date === day.date && dragItem?.field === 'lunchPastoso'}
+                                    isDropTarget={dropTarget?.date === day.date && dropTarget?.field === 'lunchPastoso'}
+                                    onToggleEdit={() => toggleEdit(day.date, 'lunchPastoso')}
+                                    onDragStart={(e) => handleDragStart(day.date, 'lunchPastoso', day.lunchPastoso ?? 'colocar módulo...', e)}
+                                    onDragEnd={handleDragEnd}
+                                    onDragOver={(e) => handleDragOver(day.date, 'lunchPastoso', e)}
+                                    onDragLeave={(e) => handleDragLeave(day.date, 'lunchPastoso', e)}
+                                    onDrop={(e) => handleDrop(day.date, 'lunchPastoso', e)}
+                                    editComponent={
                                       <CreatableInlineDropdown
                                         options={getOptionsForField('lunchPastoso')}
                                         value={day.lunchPastoso ?? 'colocar módulo de fibras (1 colher de chá)'}
@@ -1033,13 +1301,10 @@ const DEFAULT_TENANTS_MAP: Record<string, Tenant> = {
                                         onClose={() => setEditingCell(null)}
                                         placeholder="Digite ou selecione..."
                                       />
-                                    </div>
-                                  ) : (
-                                    <>
-                                      {day.lunchPastoso ?? 'colocar módulo de fibras (1 colher de chá)'}
-                                      <Pencil className="w-2 h-2 inline ml-1 opacity-40 no-print" />
-                                    </>
-                                  )}
+                                    }
+                                  >
+                                    {day.lunchPastoso ?? 'colocar módulo de fibras (1 colher de chá)'}
+                                  </DraggableCell>
                                 </div>
                               </div>
                             </div>
@@ -1100,15 +1365,21 @@ const DEFAULT_TENANTS_MAP: Record<string, Tenant> = {
                           {day && (
                             <div className="space-y-2">
                               {/* Editable Afternoon Snack */}
-                              <div
-                                className="editable-cell p-0.5 rounded -mx-0.5"
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  toggleEdit(day.date, 'afternoonSnack');
-                                }}
-                              >
-                                {editingCell?.date === day.date && editingCell?.field === 'afternoonSnack' ? (
-                                  <div onClick={(e) => e.stopPropagation()}>
+                              <div>
+                                <DraggableCell
+                                  date={day.date}
+                                  field="afternoonSnack"
+                                  value={day.afternoonSnack}
+                                  isEditing={editingCell?.date === day.date && editingCell?.field === 'afternoonSnack'}
+                                  isDragging={dragItem?.date === day.date && dragItem?.field === 'afternoonSnack'}
+                                  isDropTarget={dropTarget?.date === day.date && dropTarget?.field === 'afternoonSnack'}
+                                  onToggleEdit={() => toggleEdit(day.date, 'afternoonSnack')}
+                                  onDragStart={(e) => handleDragStart(day.date, 'afternoonSnack', day.afternoonSnack, e)}
+                                  onDragEnd={handleDragEnd}
+                                  onDragOver={(e) => handleDragOver(day.date, 'afternoonSnack', e)}
+                                  onDragLeave={(e) => handleDragLeave(day.date, 'afternoonSnack', e)}
+                                  onDrop={(e) => handleDrop(day.date, 'afternoonSnack', e)}
+                                  editComponent={
                                     <CreatableInlineDropdown
                                       options={getOptionsForField('afternoonSnack')}
                                       value={day.afternoonSnack}
@@ -1116,41 +1387,39 @@ const DEFAULT_TENANTS_MAP: Record<string, Tenant> = {
                                       onClose={() => setEditingCell(null)}
                                       placeholder="Digite ou selecione o lanche..."
                                     />
-                                  </div>
-                                ) : (
-                                  <p className="text-[11px] leading-tight cursor-pointer hover:bg-sky-100 rounded px-0.5 transition-colors">
-                                    {day.afternoonSnack}
-                                    <Pencil className="w-2.5 h-2.5 inline ml-1 opacity-40 no-print" />
-                                  </p>
-                                )}
+                                  }
+                                >
+                                  {day.afternoonSnack}
+                                </DraggableCell>
                               </div>
 
-                              <div className="text-[9.5px] leading-tight text-red-800">
-                                <span className="font-bold">Diabéticos:</span>{' '}
-                                <span
-                                  className="editable-cell hover:bg-sky-100 rounded px-0.5 inline-block cursor-pointer"
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    toggleEdit(day.date, 'afternoonSnackDiabetic');
-                                  }}
+                              <div className="text-[9.5px] leading-tight text-red-800 flex items-center gap-1">
+                                <span className="font-bold shrink-0">Diabéticos:</span>
+                                <DraggableCell
+                                  date={day.date}
+                                  field="afternoonSnackDiabetic"
+                                  value={day.afternoonSnackDiabetic}
+                                  isEditing={editingCell?.date === day.date && editingCell?.field === 'afternoonSnackDiabetic'}
+                                  isDragging={dragItem?.date === day.date && dragItem?.field === 'afternoonSnackDiabetic'}
+                                  isDropTarget={dropTarget?.date === day.date && dropTarget?.field === 'afternoonSnackDiabetic'}
+                                  onToggleEdit={() => toggleEdit(day.date, 'afternoonSnackDiabetic')}
+                                  onDragStart={(e) => handleDragStart(day.date, 'afternoonSnackDiabetic', day.afternoonSnackDiabetic, e)}
+                                  onDragEnd={handleDragEnd}
+                                  onDragOver={(e) => handleDragOver(day.date, 'afternoonSnackDiabetic', e)}
+                                  onDragLeave={(e) => handleDragLeave(day.date, 'afternoonSnackDiabetic', e)}
+                                  onDrop={(e) => handleDrop(day.date, 'afternoonSnackDiabetic', e)}
+                                  editComponent={
+                                    <CreatableInlineDropdown
+                                      options={getOptionsForField('afternoonSnackDiabetic')}
+                                      value={day.afternoonSnackDiabetic}
+                                      onSelect={(val) => updateDailyMealField(day.date, 'afternoonSnackDiabetic', val)}
+                                      onClose={() => setEditingCell(null)}
+                                      placeholder="Digite ou selecione..."
+                                    />
+                                  }
                                 >
-                                  {editingCell?.date === day.date && editingCell?.field === 'afternoonSnackDiabetic' ? (
-                                    <div onClick={(e) => e.stopPropagation()}>
-                                      <CreatableInlineDropdown
-                                        options={getOptionsForField('afternoonSnackDiabetic')}
-                                        value={day.afternoonSnackDiabetic}
-                                        onSelect={(val) => updateDailyMealField(day.date, 'afternoonSnackDiabetic', val)}
-                                        onClose={() => setEditingCell(null)}
-                                        placeholder="Digite ou selecione..."
-                                      />
-                                    </div>
-                                  ) : (
-                                    <>
-                                      {day.afternoonSnackDiabetic}
-                                      <Pencil className="w-2 h-2 inline ml-1 opacity-40 no-print" />
-                                    </>
-                                  )}
-                                </span>
+                                  {day.afternoonSnackDiabetic}
+                                </DraggableCell>
                               </div>
                             </div>
                           )}
@@ -1168,15 +1437,21 @@ const DEFAULT_TENANTS_MAP: Record<string, Tenant> = {
                           {day && (
                             <div className="space-y-2">
                               {/* Editable Dinner */}
-                              <div
-                                className="editable-cell p-0.5 rounded -mx-0.5"
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  toggleEdit(day.date, 'dinner');
-                                }}
-                              >
-                                {editingCell?.date === day.date && editingCell?.field === 'dinner' ? (
-                                  <div onClick={(e) => e.stopPropagation()}>
+                              <div>
+                                <DraggableCell
+                                  date={day.date}
+                                  field="dinner"
+                                  value={day.dinner}
+                                  isEditing={editingCell?.date === day.date && editingCell?.field === 'dinner'}
+                                  isDragging={dragItem?.date === day.date && dragItem?.field === 'dinner'}
+                                  isDropTarget={dropTarget?.date === day.date && dropTarget?.field === 'dinner'}
+                                  onToggleEdit={() => toggleEdit(day.date, 'dinner')}
+                                  onDragStart={(e) => handleDragStart(day.date, 'dinner', day.dinner, e)}
+                                  onDragEnd={handleDragEnd}
+                                  onDragOver={(e) => handleDragOver(day.date, 'dinner', e)}
+                                  onDragLeave={(e) => handleDragLeave(day.date, 'dinner', e)}
+                                  onDrop={(e) => handleDrop(day.date, 'dinner', e)}
+                                  editComponent={
                                     <CreatableInlineDropdown
                                       options={getOptionsForField('dinner')}
                                       value={day.dinner}
@@ -1184,41 +1459,39 @@ const DEFAULT_TENANTS_MAP: Record<string, Tenant> = {
                                       onClose={() => setEditingCell(null)}
                                       placeholder="Digite ou selecione o jantar..."
                                     />
-                                  </div>
-                                ) : (
-                                  <p className="text-[11px] leading-tight cursor-pointer hover:bg-amber-100 rounded px-0.5 transition-colors">
-                                    {day.dinner}
-                                    <Pencil className="w-2.5 h-2.5 inline ml-1 opacity-40 no-print" />
-                                  </p>
-                                )}
+                                  }
+                                >
+                                  {day.dinner}
+                                </DraggableCell>
                               </div>
 
-                              <div className="text-[9.5px] leading-tight text-red-800">
-                                <span className="font-bold">Diabéticos:</span>{' '}
-                                <span
-                                  className="editable-cell hover:bg-amber-100 rounded px-0.5 inline-block cursor-pointer"
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    toggleEdit(day.date, 'dinnerDiabetic');
-                                  }}
+                              <div className="text-[9.5px] leading-tight text-red-800 flex items-center gap-1">
+                                <span className="font-bold shrink-0">Diabéticos:</span>
+                                <DraggableCell
+                                  date={day.date}
+                                  field="dinnerDiabetic"
+                                  value={day.dinnerDiabetic || 'Repetir o almoço...'}
+                                  isEditing={editingCell?.date === day.date && editingCell?.field === 'dinnerDiabetic'}
+                                  isDragging={dragItem?.date === day.date && dragItem?.field === 'dinnerDiabetic'}
+                                  isDropTarget={dropTarget?.date === day.date && dropTarget?.field === 'dinnerDiabetic'}
+                                  onToggleEdit={() => toggleEdit(day.date, 'dinnerDiabetic')}
+                                  onDragStart={(e) => handleDragStart(day.date, 'dinnerDiabetic', day.dinnerDiabetic || 'Repetir o almoço...', e)}
+                                  onDragEnd={handleDragEnd}
+                                  onDragOver={(e) => handleDragOver(day.date, 'dinnerDiabetic', e)}
+                                  onDragLeave={(e) => handleDragLeave(day.date, 'dinnerDiabetic', e)}
+                                  onDrop={(e) => handleDrop(day.date, 'dinnerDiabetic', e)}
+                                  editComponent={
+                                    <CreatableInlineDropdown
+                                      options={getOptionsForField('dinnerDiabetic')}
+                                      value={day.dinnerDiabetic}
+                                      onSelect={(val) => updateDailyMealField(day.date, 'dinnerDiabetic', val)}
+                                      onClose={() => setEditingCell(null)}
+                                      placeholder="Digite ou selecione..."
+                                    />
+                                  }
                                 >
-                                  {editingCell?.date === day.date && editingCell?.field === 'dinnerDiabetic' ? (
-                                    <div onClick={(e) => e.stopPropagation()}>
-                                      <CreatableInlineDropdown
-                                        options={getOptionsForField('dinnerDiabetic')}
-                                        value={day.dinnerDiabetic}
-                                        onSelect={(val) => updateDailyMealField(day.date, 'dinnerDiabetic', val)}
-                                        onClose={() => setEditingCell(null)}
-                                        placeholder="Digite ou selecione..."
-                                      />
-                                    </div>
-                                  ) : (
-                                    <>
-                                      {day.dinnerDiabetic || 'Repetir o almoço, porém ½ porção de carboidratos ou caldo de legumes com módulo de fibras( 1 colher de chá)'}
-                                      <Pencil className="w-2 h-2 inline ml-1 opacity-40 no-print" />
-                                    </>
-                                  )}
-                                </span>
+                                  {day.dinnerDiabetic || 'Repetir o almoço, porém ½ porção de carboidratos ou caldo de legumes com módulo de fibras( 1 colher de chá)'}
+                                </DraggableCell>
                               </div>
                             </div>
                           )}
@@ -1236,15 +1509,21 @@ const DEFAULT_TENANTS_MAP: Record<string, Tenant> = {
                           {day && (
                             <div className="space-y-2">
                               {/* Editable Supper */}
-                              <div
-                                className="editable-cell p-0.5 rounded -mx-0.5"
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  toggleEdit(day.date, 'supper');
-                                }}
-                              >
-                                {editingCell?.date === day.date && editingCell?.field === 'supper' ? (
-                                  <div onClick={(e) => e.stopPropagation()}>
+                              <div>
+                                <DraggableCell
+                                  date={day.date}
+                                  field="supper"
+                                  value={day.supper}
+                                  isEditing={editingCell?.date === day.date && editingCell?.field === 'supper'}
+                                  isDragging={dragItem?.date === day.date && dragItem?.field === 'supper'}
+                                  isDropTarget={dropTarget?.date === day.date && dropTarget?.field === 'supper'}
+                                  onToggleEdit={() => toggleEdit(day.date, 'supper')}
+                                  onDragStart={(e) => handleDragStart(day.date, 'supper', day.supper, e)}
+                                  onDragEnd={handleDragEnd}
+                                  onDragOver={(e) => handleDragOver(day.date, 'supper', e)}
+                                  onDragLeave={(e) => handleDragLeave(day.date, 'supper', e)}
+                                  onDrop={(e) => handleDrop(day.date, 'supper', e)}
+                                  editComponent={
                                     <CreatableInlineDropdown
                                       options={getOptionsForField('supper')}
                                       value={day.supper}
@@ -1252,41 +1531,39 @@ const DEFAULT_TENANTS_MAP: Record<string, Tenant> = {
                                       onClose={() => setEditingCell(null)}
                                       placeholder="Digite ou selecione a ceia..."
                                     />
-                                  </div>
-                                ) : (
-                                  <p className="text-[11px] leading-tight cursor-pointer hover:bg-purple-100 rounded px-0.5 transition-colors">
-                                    {day.supper}
-                                    <Pencil className="w-2.5 h-2.5 inline ml-1 opacity-40 no-print" />
-                                  </p>
-                                )}
+                                  }
+                                >
+                                  {day.supper}
+                                </DraggableCell>
                               </div>
 
-                              <div className="text-[9.5px] leading-tight text-red-800">
-                                <span className="font-bold">Diabéticos:</span>{' '}
-                                <span
-                                  className="editable-cell hover:bg-purple-100 rounded px-0.5 inline-block cursor-pointer"
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    toggleEdit(day.date, 'supperDiabetic');
-                                  }}
+                              <div className="text-[9.5px] leading-tight text-red-800 flex items-center gap-1">
+                                <span className="font-bold shrink-0">Diabéticos:</span>
+                                <DraggableCell
+                                  date={day.date}
+                                  field="supperDiabetic"
+                                  value={day.supperDiabetic ?? 'Mingau de aveia...'}
+                                  isEditing={editingCell?.date === day.date && editingCell?.field === 'supperDiabetic'}
+                                  isDragging={dragItem?.date === day.date && dragItem?.field === 'supperDiabetic'}
+                                  isDropTarget={dropTarget?.date === day.date && dropTarget?.field === 'supperDiabetic'}
+                                  onToggleEdit={() => toggleEdit(day.date, 'supperDiabetic')}
+                                  onDragStart={(e) => handleDragStart(day.date, 'supperDiabetic', day.supperDiabetic ?? 'Mingau...', e)}
+                                  onDragEnd={handleDragEnd}
+                                  onDragOver={(e) => handleDragOver(day.date, 'supperDiabetic', e)}
+                                  onDragLeave={(e) => handleDragLeave(day.date, 'supperDiabetic', e)}
+                                  onDrop={(e) => handleDrop(day.date, 'supperDiabetic', e)}
+                                  editComponent={
+                                    <CreatableInlineDropdown
+                                      options={getOptionsForField('supperDiabetic')}
+                                      value={day.supperDiabetic ?? 'Mingau de aveia com adoçante ou Escolher 2 opções: Queijo, Ovo, pão integral, banana cozida com canela e farelo de aveia, batata doce, aipim com queijo minas, café com leite e adoçante, Iogurte diet.'}
+                                      onSelect={(val) => updateDailyMealField(day.date, 'supperDiabetic', val)}
+                                      onClose={() => setEditingCell(null)}
+                                      placeholder="Digite ou selecione..."
+                                    />
+                                  }
                                 >
-                                  {editingCell?.date === day.date && editingCell?.field === 'supperDiabetic' ? (
-                                    <div onClick={(e) => e.stopPropagation()}>
-                                      <CreatableInlineDropdown
-                                        options={getOptionsForField('supperDiabetic')}
-                                        value={day.supperDiabetic ?? 'Mingau de aveia com adoçante ou Escolher 2 opções: Queijo, Ovo, pão integral, banana cozida com canela e farelo de aveia, batata doce, aipim com queijo minas, café com leite e adoçante, Iogurte diet.'}
-                                        onSelect={(val) => updateDailyMealField(day.date, 'supperDiabetic', val)}
-                                        onClose={() => setEditingCell(null)}
-                                        placeholder="Digite ou selecione..."
-                                      />
-                                    </div>
-                                  ) : (
-                                    <>
-                                      {day.supperDiabetic ?? 'Mingau de aveia com adoçante ou Escolher 2 opções: Queijo, Ovo, pão integral, banana cozida com canela e farelo de aveia, batata doce, aipim com queijo minas, café com leite e adoçante, Iogurte diet.'}
-                                      <Pencil className="w-2 h-2 inline ml-1 opacity-40 no-print" />
-                                    </>
-                                  )}
-                                </span>
+                                  {day.supperDiabetic ?? 'Mingau de aveia com adoçante ou Escolher 2 opções: Queijo, Ovo, pão integral, banana cozida com canela e farelo de aveia, batata doce, aipim com queijo minas, café com leite e adoçante, Iogurte diet.'}
+                                </DraggableCell>
                               </div>
                             </div>
                           )}
