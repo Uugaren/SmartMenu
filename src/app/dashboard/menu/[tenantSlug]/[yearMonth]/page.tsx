@@ -235,94 +235,99 @@ const DEFAULT_TENANTS_MAP: Record<string, Tenant> = {
   // Load tenant + dishes + existing menus
   useEffect(() => {
     async function loadData() {
-      const { data: tenantData } = await supabase
-        .from('tenants')
-        .select('*')
-        .eq('slug', tenantSlug)
-        .maybeSingle();
-
-      let resolvedTenant: Tenant | null = tenantData ?? null;
-
-      if (!resolvedTenant && DEFAULT_TENANTS_MAP[tenantSlug]) {
-        resolvedTenant = DEFAULT_TENANTS_MAP[tenantSlug];
-        supabase
+      try {
+        const { data: tenantData } = await supabase
           .from('tenants')
-          .insert({
-            name: resolvedTenant.name,
-            slug: resolvedTenant.slug,
-            primary_color: resolvedTenant.primary_color,
-            logo_url: resolvedTenant.logo_url,
-          })
-          .then(() => {});
+          .select('*')
+          .eq('slug', tenantSlug)
+          .maybeSingle();
+
+        let resolvedTenant: Tenant | null = tenantData ?? null;
+
+        if (!resolvedTenant && DEFAULT_TENANTS_MAP[tenantSlug]) {
+          resolvedTenant = DEFAULT_TENANTS_MAP[tenantSlug];
+          supabase
+            .from('tenants')
+            .insert({
+              name: resolvedTenant.name,
+              slug: resolvedTenant.slug,
+              primary_color: resolvedTenant.primary_color,
+              logo_url: resolvedTenant.logo_url,
+            })
+            .then(() => {});
+        }
+
+        if (!resolvedTenant) {
+          resolvedTenant = {
+            id: `tenant-${tenantSlug}`,
+            name: tenantSlug.replace(/-/g, ' ').toUpperCase(),
+            slug: tenantSlug,
+            logo_url: '/logos/lares.jpg',
+            primary_color: '#059669',
+            created_at: new Date().toISOString(),
+          };
+        }
+
+        setTenant(resolvedTenant);
+
+        // Fetch tenant + global dishes
+        const { data: dishesData } = await supabase
+          .from('dishes')
+          .select('*')
+          .or(`tenant_id.eq.${resolvedTenant.id},tenant_id.is.null`)
+          .order('name');
+        setDishes(dishesData ?? []);
+
+        const startDate = `${yearMonth}-01`;
+        const endDate = `${yearMonth}-31`;
+        const { data: existingMenus } = await supabase
+          .from('monthly_menus')
+          .select('*, lunch_dish:dishes(*)')
+          .eq('tenant_id', resolvedTenant.id)
+          .gte('date', startDate)
+          .lte('date', endDate)
+          .order('date');
+
+        const generated = generateMonthlyMenu(resolvedTenant, dishesData ?? [], year, month);
+
+        if (existingMenus && existingMenus.length > 0) {
+          const merged = generated.map((day) => {
+            const existing = existingMenus.find((m: MonthlyMenu) => m.date === day.date);
+            if (existing) {
+              const mealData = (existing.meal_data || {}) as Partial<DailyMeal>;
+              return {
+                ...day,
+                lunchMain: existing.lunch_dish?.name ?? mealData.lunchMain ?? day.lunchMain,
+                lunchMainDishId: existing.lunch_dish_id ?? mealData.lunchMainDishId ?? day.lunchMainDishId,
+                lunchSalad: existing.lunch_salad ?? mealData.lunchSalad ?? day.lunchSalad,
+                juice: existing.juice ?? mealData.juice ?? day.juice,
+                dessert: existing.dessert_override ?? mealData.dessert ?? day.dessert,
+                breakfast: mealData.breakfast ?? day.breakfast,
+                breakfastDiabetic: mealData.breakfastDiabetic ?? day.breakfastDiabetic,
+                breakfastPastoso: mealData.breakfastPastoso ?? day.breakfastPastoso,
+                colacao: mealData.colacao ?? day.colacao,
+                lunchSide: mealData.lunchSide ?? day.lunchSide,
+                lunchDiabetic: mealData.lunchDiabetic ?? day.lunchDiabetic,
+                lunchPastoso: mealData.lunchPastoso ?? day.lunchPastoso,
+                afternoonSnack: mealData.afternoonSnack ?? day.afternoonSnack,
+                afternoonSnackDiabetic: mealData.afternoonSnackDiabetic ?? day.afternoonSnackDiabetic,
+                dinner: mealData.dinner ?? day.dinner,
+                dinnerDiabetic: mealData.dinnerDiabetic ?? day.dinnerDiabetic,
+                supper: mealData.supper ?? day.supper,
+                supperDiabetic: mealData.supperDiabetic ?? day.supperDiabetic,
+              };
+            }
+            return day;
+          });
+          setDays(merged);
+        } else {
+          setDays(generated);
+        }
+      } catch (err) {
+        console.error('Erro ao carregar dados do cardápio:', err);
+      } finally {
+        setLoading(false);
       }
-
-      if (!resolvedTenant) {
-        resolvedTenant = {
-          id: `tenant-${tenantSlug}`,
-          name: tenantSlug.replace(/-/g, ' ').toUpperCase(),
-          slug: tenantSlug,
-          logo_url: '/logos/lares.jpg',
-          primary_color: '#059669',
-          created_at: new Date().toISOString(),
-        };
-      }
-
-      setTenant(resolvedTenant);
-
-      // Fetch tenant + global dishes
-      const { data: dishesData } = await supabase
-        .from('dishes')
-        .select('*')
-        .or(`tenant_id.eq.${tenantData.id},tenant_id.is.null`)
-        .order('name');
-      setDishes(dishesData ?? []);
-
-      const startDate = `${yearMonth}-01`;
-      const endDate = `${yearMonth}-31`;
-      const { data: existingMenus } = await supabase
-        .from('monthly_menus')
-        .select('*, lunch_dish:dishes(*)')
-        .eq('tenant_id', tenantData.id)
-        .gte('date', startDate)
-        .lte('date', endDate)
-        .order('date');
-
-      const generated = generateMonthlyMenu(tenantData, dishesData ?? [], year, month);
-
-      if (existingMenus && existingMenus.length > 0) {
-        const merged = generated.map((day) => {
-          const existing = existingMenus.find((m: MonthlyMenu) => m.date === day.date);
-          if (existing) {
-            const mealData = (existing.meal_data || {}) as Partial<DailyMeal>;
-            return {
-              ...day,
-              lunchMain: existing.lunch_dish?.name ?? mealData.lunchMain ?? day.lunchMain,
-              lunchMainDishId: existing.lunch_dish_id ?? mealData.lunchMainDishId ?? day.lunchMainDishId,
-              lunchSalad: existing.lunch_salad ?? mealData.lunchSalad ?? day.lunchSalad,
-              juice: existing.juice ?? mealData.juice ?? day.juice,
-              dessert: existing.dessert_override ?? mealData.dessert ?? day.dessert,
-              breakfast: mealData.breakfast ?? day.breakfast,
-              breakfastDiabetic: mealData.breakfastDiabetic ?? day.breakfastDiabetic,
-              breakfastPastoso: mealData.breakfastPastoso ?? day.breakfastPastoso,
-              colacao: mealData.colacao ?? day.colacao,
-              lunchSide: mealData.lunchSide ?? day.lunchSide,
-              lunchDiabetic: mealData.lunchDiabetic ?? day.lunchDiabetic,
-              lunchPastoso: mealData.lunchPastoso ?? day.lunchPastoso,
-              afternoonSnack: mealData.afternoonSnack ?? day.afternoonSnack,
-              afternoonSnackDiabetic: mealData.afternoonSnackDiabetic ?? day.afternoonSnackDiabetic,
-              dinner: mealData.dinner ?? day.dinner,
-              dinnerDiabetic: mealData.dinnerDiabetic ?? day.dinnerDiabetic,
-              supper: mealData.supper ?? day.supper,
-              supperDiabetic: mealData.supperDiabetic ?? day.supperDiabetic,
-            };
-          }
-          return day;
-        });
-        setDays(merged);
-      } else {
-        setDays(generated);
-      }
-      setLoading(false);
     }
     loadData();
   }, [tenantSlug, yearMonth, year, month, router]);
