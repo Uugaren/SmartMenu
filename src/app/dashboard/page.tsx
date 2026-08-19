@@ -104,32 +104,37 @@ export default function DashboardPage() {
         .select('*')
         .order('name');
 
+      const DEFAULT_TENANTS: Tenant[] = [
+        {
+          id: 'lares-id',
+          name: 'Lares Casa de Repouso',
+          slug: 'lares',
+          logo_url: '/logos/lares.jpg',
+          primary_color: '#059669',
+          created_at: '2026-01-01',
+        },
+        {
+          id: 'vida-plena-id',
+          name: 'Casa de Repouso Vida Plena',
+          slug: 'vida-plena',
+          logo_url: '/logos/vida-plena.png',
+          primary_color: '#0891B2',
+          created_at: '2026-01-01',
+        },
+        {
+          id: 'vovo-alda-id',
+          name: 'Casa de Repouso Vovó Alda',
+          slug: 'vovo-alda',
+          logo_url: '/logos/vovo-alda.png',
+          primary_color: '#0284c7',
+          created_at: '2026-01-01',
+        },
+      ];
+
       let list = tenantData ?? [];
-      if (!list.find((t) => t.slug === 'vovo-alda')) {
-        const { data: newTenant } = await supabase
-          .from('tenants')
-          .insert({
-            name: 'Casa de Repouso Vovó Alda',
-            slug: 'vovo-alda',
-            primary_color: '#0284c7',
-            logo_url: '/logos/vovo-alda.png',
-          })
-          .select('*')
-          .single();
-        if (newTenant) {
-          list = [...list, newTenant];
-        } else {
-          list = [
-            ...list,
-            {
-              id: 'vovo-alda-id',
-              name: 'Casa de Repouso Vovó Alda',
-              slug: 'vovo-alda',
-              logo_url: '/logos/vovo-alda.png',
-              primary_color: '#0284c7',
-              created_at: new Date().toISOString(),
-            },
-          ];
+      for (const defTenant of DEFAULT_TENANTS) {
+        if (!list.find((t) => t.slug === defTenant.slug)) {
+          list.push(defTenant);
         }
       }
 

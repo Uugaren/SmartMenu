@@ -205,6 +205,33 @@ export default function MenuEditorPage({ params }: { params: Params }) {
   const [year, month] = yearMonth.split('-').map(Number);
   const monthLabel = `${MONTHS[month - 1]} ${year}`;
 
+const DEFAULT_TENANTS_MAP: Record<string, Tenant> = {
+  lares: {
+    id: 'lares-id',
+    name: 'Lares Casa de Repouso',
+    slug: 'lares',
+    logo_url: '/logos/lares.jpg',
+    primary_color: '#059669',
+    created_at: '2026-01-01',
+  },
+  'vida-plena': {
+    id: 'vida-plena-id',
+    name: 'Casa de Repouso Vida Plena',
+    slug: 'vida-plena',
+    logo_url: '/logos/vida-plena.png',
+    primary_color: '#0891B2',
+    created_at: '2026-01-01',
+  },
+  'vovo-alda': {
+    id: 'vovo-alda-id',
+    name: 'Casa de Repouso Vovó Alda',
+    slug: 'vovo-alda',
+    logo_url: '/logos/vovo-alda.png',
+    primary_color: '#0284c7',
+    created_at: '2026-01-01',
+  },
+};
+
   // Load tenant + dishes + existing menus
   useEffect(() => {
     async function loadData() {
@@ -212,13 +239,35 @@ export default function MenuEditorPage({ params }: { params: Params }) {
         .from('tenants')
         .select('*')
         .eq('slug', tenantSlug)
-        .single();
+        .maybeSingle();
 
-      if (!tenantData) {
-        router.push('/dashboard');
-        return;
+      let resolvedTenant: Tenant | null = tenantData ?? null;
+
+      if (!resolvedTenant && DEFAULT_TENANTS_MAP[tenantSlug]) {
+        resolvedTenant = DEFAULT_TENANTS_MAP[tenantSlug];
+        supabase
+          .from('tenants')
+          .insert({
+            name: resolvedTenant.name,
+            slug: resolvedTenant.slug,
+            primary_color: resolvedTenant.primary_color,
+            logo_url: resolvedTenant.logo_url,
+          })
+          .then(() => {});
       }
-      setTenant(tenantData);
+
+      if (!resolvedTenant) {
+        resolvedTenant = {
+          id: `tenant-${tenantSlug}`,
+          name: tenantSlug.replace(/-/g, ' ').toUpperCase(),
+          slug: tenantSlug,
+          logo_url: '/logos/lares.jpg',
+          primary_color: '#059669',
+          created_at: new Date().toISOString(),
+        };
+      }
+
+      setTenant(resolvedTenant);
 
       // Fetch tenant + global dishes
       const { data: dishesData } = await supabase
