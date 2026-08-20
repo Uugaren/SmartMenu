@@ -298,8 +298,16 @@ export default function MenuEditorPage({ params }: { params: Params }) {
   const [editingCell, setEditingCell] = useState<{ date: string; field: keyof DailyMeal } | null>(null);
 
   // Drag & drop state
-  const [dragItem, setDragItem] = useState<{ date: string; field: keyof DailyMeal; value: string } | null>(null);
-  const [dropTarget, setDropTarget] = useState<{ date: string; field: keyof DailyMeal } | null>(null);
+  const [dragItem, setDragItem] = useState<
+    | { type: 'CELL'; date: string; field: keyof DailyMeal; value: string }
+    | { type: 'DAY'; date: string; label: string }
+    | null
+  >(null);
+  const [dropTarget, setDropTarget] = useState<
+    | { type: 'CELL'; date: string; field: keyof DailyMeal }
+    | { type: 'DAY'; date: string }
+    | null
+  >(null);
   const [swapToast, setSwapToast] = useState<{ title: string; message: string } | null>(null);
 
   const [year, month] = yearMonth.split('-').map(Number);
@@ -518,12 +526,97 @@ export default function MenuEditorPage({ params }: { params: Params }) {
     [dishes, tenant]
   );
 
-  // Drag and Drop event handlers
+  // Helper check for cell drag highlight
+  const isCellDragging = useCallback(
+    (date: string, field: keyof DailyMeal) => {
+      if (!dragItem) return false;
+      if (dragItem.type === 'DAY') return dragItem.date === date;
+      if (dragItem.type === 'CELL') return dragItem.date === date && dragItem.field === field;
+      return false;
+    },
+    [dragItem]
+  );
+
+  const isCellDropTarget = useCallback(
+    (date: string, field: keyof DailyMeal) => {
+      if (!dropTarget) return false;
+      if (dropTarget.type === 'DAY') return dropTarget.date === date;
+      if (dropTarget.type === 'CELL') return dropTarget.date === date && dropTarget.field === field;
+      return false;
+    },
+    [dropTarget]
+  );
+
+  // Swap all meal preparations of two full days
+  const swapFullDays = useCallback(
+    (sourceDate: string, targetDate: string) => {
+      if (sourceDate === targetDate) return;
+
+      const sourceDay = days.find((d) => d.date === sourceDate);
+      const targetDay = days.find((d) => d.date === targetDate);
+
+      if (!sourceDay || !targetDay) return;
+
+      const MEAL_FIELDS: (keyof DailyMeal)[] = [
+        'breakfast',
+        'breakfastDiabetic',
+        'breakfastPastoso',
+        'colacao',
+        'lunchMain',
+        'lunchMainDishId',
+        'lunchSalad',
+        'lunchSide',
+        'juice',
+        'dessert',
+        'lunchDiabetic',
+        'lunchPastoso',
+        'afternoonSnack',
+        'afternoonSnackDiabetic',
+        'dinner',
+        'dinnerDiabetic',
+        'supper',
+        'supperDiabetic',
+      ];
+
+      setDays((prevDays) =>
+        prevDays.map((day) => {
+          if (day.date === sourceDate) {
+            const updated = { ...day };
+            for (const field of MEAL_FIELDS) {
+              (updated as any)[field] = targetDay[field];
+            }
+            return updated;
+          }
+          if (day.date === targetDate) {
+            const updated = { ...day };
+            for (const field of MEAL_FIELDS) {
+              (updated as any)[field] = sourceDay[field];
+            }
+            return updated;
+          }
+          return day;
+        })
+      );
+
+      const sourceDayLabel = getFormattedDayName(sourceDate);
+      const targetDayLabel = getFormattedDayName(targetDate);
+
+      setSwapToast({
+        title: 'Dia completo trocado! 🔄',
+        message: `Todas as preparações de [${sourceDayLabel}] ↔ [${targetDayLabel}] foram trocadas.`,
+      });
+      setTimeout(() => setSwapToast(null), 4000);
+    },
+    [days]
+  );
+
+  // Drag and Drop event handlers (Cell)
   const handleDragStart = useCallback(
     (date: string, field: keyof DailyMeal, value: string, e: React.DragEvent) => {
-      setDragItem({ date, field, value });
+      const payload = { type: 'CELL' as const, date, field, value };
+      setDragItem(payload);
       try {
-        e.dataTransfer.setData('text/plain', JSON.stringify({ date, field, value }));
+        e.dataTransfer.setData('text/plain', JSON.stringify(payload));
         e.dataTransfer.effectAllowed = 'move';
       } catch {
         // ignore
@@ -546,8 +639,8 @@ export default function MenuEditorPage({ params }: { params: Params }) {
         // ignore
       }
       setDropTarget((prev) => {
-        if (prev?.date === date && prev?.field === field) return prev;
-        return { date, field };
+        if (prev?.type === 'CELL' && prev.date === date && prev.field === field) return prev;
+        return { type: 'CELL', date, field };
       });
     },
     []
@@ -557,11 +650,80 @@ export default function MenuEditorPage({ params }: { params: Params }) {
     (date: string, field: keyof DailyMeal, e: React.DragEvent) => {
       e.preventDefault();
       setDropTarget((prev) => {
-        if (prev?.date === date && prev?.field === field) return null;
+        if (prev?.type === 'CELL' && prev.date === date && prev.field === field) return null;
         return prev;
       });
     },
     []
+  );
+
+  // Drag and Drop event handlers (Day Header)
+  const handleDragDayStart = useCallback(
+    (date: string, label: string, e: React.DragEvent) => {
+      const payload = { type: 'DAY' as const, date, label };
+      setDragItem(payload);
+      try {
+        e.dataTransfer.setData('text/plain', JSON.stringify(payload));
+        e.dataTransfer.effectAllowed = 'move';
+      } catch {
+        // ignore
+      }
+    },
+    []
+  );
+
+  const handleDragDayOver = useCallback(
+    (date: string, e: React.DragEvent) => {
+      e.preventDefault();
+      try {
+        e.dataTransfer.dropEffect = 'move';
+      } catch {
+        // ignore
+      }
+      setDropTarget((prev) => {
+        if (prev?.type === 'DAY' && prev.date === date) return prev;
+        return { type: 'DAY', date };
+      });
+    },
+    []
+  );
+
+  const handleDragDayLeave = useCallback(
+    (date: string, e: React.DragEvent) => {
+      e.preventDefault();
+      setDropTarget((prev) => {
+        if (prev?.type === 'DAY' && prev.date === date) return null;
+        return prev;
+      });
+    },
+    []
+  );
+
+  const handleDropDay = useCallback(
+    (targetDate: string, e: React.DragEvent) => {
+      e.preventDefault();
+      e.stopPropagation();
+
+      let source = dragItem;
+      if (!source) {
+        try {
+          const dataStr = e.dataTransfer.getData('text/plain');
+          if (dataStr) {
+            source = JSON.parse(dataStr);
+          }
+        } catch {
+          // ignore
+        }
+      }
+
+      if (source) {
+        swapFullDays(source.date, targetDate);
+      }
+
+      setDragItem(null);
+      setDropTarget(null);
+    },
+    [dragItem, swapFullDays]
   );
 
   const handleDrop = useCallback(
@@ -581,65 +743,74 @@ export default function MenuEditorPage({ params }: { params: Params }) {
         }
       }
 
-      if (source && (source.date !== targetDate || source.field !== targetField)) {
-        const sourceDate = source.date;
-        const sourceField = source.field;
+      if (source) {
+        const sourceType = (source as any).type;
+        if (sourceType === 'DAY') {
+          // Entire day was dragged onto a cell of targetDate -> swap full days
+          swapFullDays(source.date, targetDate);
+        } else {
+          const cellSource = source as { date: string; field: keyof DailyMeal; value: string };
+          if (cellSource.date !== targetDate || cellSource.field !== targetField) {
+            const sourceDate = cellSource.date;
+            const sourceField = cellSource.field;
 
-        const sourceDay = days.find((d) => d.date === sourceDate);
-        const targetDay = days.find((d) => d.date === targetDate);
+            const sourceDay = days.find((d) => d.date === sourceDate);
+            const targetDay = days.find((d) => d.date === targetDate);
 
-        if (sourceDay && targetDay) {
-          const sourceValue = (sourceDay[sourceField] as string) || '';
-          const targetValue = (targetDay[targetField] as string) || '';
+            if (sourceDay && targetDay) {
+              const sourceValue = (sourceDay[sourceField] as string) || '';
+              const targetValue = (targetDay[targetField] as string) || '';
 
-          const sourceDishId = sourceDay.lunchMainDishId;
-          const targetDishId = targetDay.lunchMainDishId;
+              const sourceDishId = sourceDay.lunchMainDishId;
+              const targetDishId = targetDay.lunchMainDishId;
 
-          setDays((prevDays) =>
-            prevDays.map((day) => {
-              if (day.date === sourceDate && day.date === targetDate) {
-                const updated = {
-                  ...day,
-                  [sourceField]: targetValue,
-                  [targetField]: sourceValue,
-                };
-                if (sourceField === 'lunchMain') updated.lunchMainDishId = targetDishId;
-                if (targetField === 'lunchMain') updated.lunchMainDishId = sourceDishId;
-                return updated;
-              }
-              if (day.date === sourceDate) {
-                const updated = { ...day, [sourceField]: targetValue };
-                if (sourceField === 'lunchMain') {
-                  updated.lunchMainDishId = targetField === 'lunchMain' ? targetDishId : null;
-                }
-                return updated;
-              }
-              if (day.date === targetDate) {
-                const updated = { ...day, [targetField]: sourceValue };
-                if (targetField === 'lunchMain') {
-                  updated.lunchMainDishId = sourceField === 'lunchMain' ? sourceDishId : null;
-                }
-                return updated;
-              }
-              return day;
-            })
-          );
+              setDays((prevDays) =>
+                prevDays.map((day) => {
+                  if (day.date === sourceDate && day.date === targetDate) {
+                    const updated = {
+                      ...day,
+                      [sourceField]: targetValue,
+                      [targetField]: sourceValue,
+                    };
+                    if (sourceField === 'lunchMain') updated.lunchMainDishId = targetDishId;
+                    if (targetField === 'lunchMain') updated.lunchMainDishId = sourceDishId;
+                    return updated;
+                  }
+                  if (day.date === sourceDate) {
+                    const updated = { ...day, [sourceField]: targetValue };
+                    if (sourceField === 'lunchMain') {
+                      updated.lunchMainDishId = targetField === 'lunchMain' ? targetDishId : null;
+                    }
+                    return updated;
+                  }
+                  if (day.date === targetDate) {
+                    const updated = { ...day, [targetField]: sourceValue };
+                    if (targetField === 'lunchMain') {
+                      updated.lunchMainDishId = sourceField === 'lunchMain' ? sourceDishId : null;
+                    }
+                    return updated;
+                  }
+                  return day;
+                })
+              );
 
-          const sourceDayLabel = getFormattedDayName(sourceDate);
-          const targetDayLabel = getFormattedDayName(targetDate);
+              const sourceDayLabel = getFormattedDayName(sourceDate);
+              const targetDayLabel = getFormattedDayName(targetDate);
 
-          setSwapToast({
-            title: 'Pratos trocados de lugar! 🔄',
-            message: `"${sourceValue}" [${sourceDayLabel}] ↔ "${targetValue}" [${targetDayLabel}]`,
-          });
-          setTimeout(() => setSwapToast(null), 4000);
+              setSwapToast({
+                title: 'Pratos trocados de lugar! 🔄',
+                message: `"${sourceValue}" [${sourceDayLabel}] ↔ "${targetValue}" [${targetDayLabel}]`,
+              });
+              setTimeout(() => setSwapToast(null), 4000);
+            }
+          }
         }
       }
 
       setDragItem(null);
       setDropTarget(null);
     },
-    [dragItem, days]
+    [dragItem, days, swapFullDays]
   );
 
   // Save to Supabase
@@ -862,9 +1033,13 @@ export default function MenuEditorPage({ params }: { params: Params }) {
 
       {/* Floating active drag indicator */}
       {dragItem && (
-        <div className="no-print fixed top-16 left-1/2 -translate-x-1/2 z-50 bg-amber-500 text-slate-950 text-xs font-bold px-4 py-2 rounded-full shadow-lg border border-amber-300 animate-pulse flex items-center gap-2 pointer-events-none">
-          <GripVertical className="w-4 h-4" />
-          <span>Solte sobre outro prato/dia para trocar de lugar com "{dragItem.value}"</span>
+        <div className="no-print fixed top-16 left-1/2 -translate-x-1/2 z-50 bg-amber-500 text-slate-950 text-xs font-bold px-5 py-2.5 rounded-full shadow-2xl border border-amber-300 animate-pulse flex items-center gap-2.5 pointer-events-none">
+          <GripVertical className="w-4 h-4 shrink-0" />
+          <span>
+            {dragItem.type === 'DAY'
+              ? `Solte sobre outro dia para trocar TODAS as preparações de [${getFormattedDayName(dragItem.date)}]`
+              : `Solte sobre outro prato/dia para trocar de lugar com "${dragItem.value}"`}
+          </span>
         </div>
       )}
 
@@ -934,7 +1109,7 @@ export default function MenuEditorPage({ params }: { params: Params }) {
           <div className="flex items-center gap-2">
             <Sparkles className="w-4 h-4 text-emerald-600 shrink-0" />
             <span>
-              <strong>Drag & Drop Interativo:</strong> Arraste e solte qualquer item do cardápio (ex: <em>Filé Empanado na Segunda ↔ Bife a Cavalo na Quarta</em>) para trocar de lugar. Clique para editar o texto.
+              <strong>Drag & Drop Completo:</strong> Arraste o <u>cabeçalho do dia</u> para trocar <strong>TODAS AS PREPARAÇÕES DO DIA</strong> com outro dia. Para mover um prato individual, arraste a célula desejada.
             </span>
           </div>
         </div>
@@ -974,21 +1149,48 @@ export default function MenuEditorPage({ params }: { params: Params }) {
                       <th className="border border-slate-400 p-2 text-center font-bold text-xs uppercase w-32">
                         REFEIÇÕES
                       </th>
-                      {week.map((day, dayIdx) => (
-                        <th
-                          key={dayIdx}
-                          className="border border-slate-400 p-2 text-center font-bold text-xs uppercase"
-                        >
-                          {day ? (
-                            <>
-                              <div>{DAY_NAMES_FULL[dayIdx]}</div>
-                              <div className="text-[11px] font-semibold">{format(parse(day.date, 'yyyy-MM-dd', new Date()), 'dd')}</div>
-                            </>
-                          ) : (
-                            <div>{DAY_NAMES_SHORT[dayIdx]}</div>
-                          )}
-                        </th>
-                      ))}
+                      {week.map((day, dayIdx) => {
+                        if (!day) {
+                          return (
+                            <th key={dayIdx} className="border border-slate-400 p-2 text-center font-bold text-xs uppercase bg-slate-100">
+                              {DAY_NAMES_SHORT[dayIdx]}
+                            </th>
+                          );
+                        }
+
+                        const dayLabel = getFormattedDayName(day.date);
+                        const isDayDragging = dragItem?.type === 'DAY' && dragItem.date === day.date;
+                        const isDayDropTarget = dropTarget?.date === day.date;
+
+                        return (
+                          <th
+                            key={dayIdx}
+                            draggable
+                            onDragStart={(e) => handleDragDayStart(day.date, dayLabel, e)}
+                            onDragEnd={handleDragEnd}
+                            onDragOver={(e) => handleDragDayOver(day.date, e)}
+                            onDragLeave={(e) => handleDragDayLeave(day.date, e)}
+                            onDrop={(e) => handleDropDay(day.date, e)}
+                            className={`border border-slate-400 p-1.5 text-center font-bold text-xs uppercase cursor-grab active:cursor-grabbing transition-all select-none group relative ${
+                              isDayDragging
+                                ? 'bg-amber-200 opacity-40 ring-2 ring-dashed ring-amber-600 scale-95'
+                                : isDayDropTarget
+                                ? 'bg-emerald-200 ring-2 ring-emerald-500 scale-[1.02] shadow-md border-emerald-600'
+                                : 'hover:bg-amber-50 bg-slate-200'
+                            }`}
+                            title="Arraste este dia para trocar TODAS as refeições com outro dia"
+                          >
+                            <div className="flex items-center justify-center gap-1 text-[10px] text-amber-900 font-semibold mb-0.5 no-print opacity-70 group-hover:opacity-100 transition-opacity">
+                              <GripVertical className="w-3.5 h-3.5 text-amber-700 shrink-0" />
+                              <span className="text-[9px] tracking-tight">MOVER DIA</span>
+                            </div>
+                            <div>{DAY_NAMES_FULL[dayIdx]}</div>
+                            <div className="text-[11px] font-extrabold text-emerald-800">
+                              {format(parse(day.date, 'yyyy-MM-dd', new Date()), 'dd/MM')}
+                            </div>
+                          </th>
+                        );
+                      })}
                     </tr>
                   </thead>
                   <tbody>
@@ -1011,8 +1213,8 @@ export default function MenuEditorPage({ params }: { params: Params }) {
                                   field="breakfast"
                                   value={day.breakfast || 'Pão francês/Doce com manteiga Café com leite'}
                                   isEditing={editingCell?.date === day.date && editingCell?.field === 'breakfast'}
-                                  isDragging={dragItem?.date === day.date && dragItem?.field === 'breakfast'}
-                                  isDropTarget={dropTarget?.date === day.date && dropTarget?.field === 'breakfast'}
+                                  isDragging={isCellDragging(day.date, 'breakfast')}
+                                  isDropTarget={isCellDropTarget(day.date, 'breakfast')}
                                   onToggleEdit={() => toggleEdit(day.date, 'breakfast')}
                                   onDragStart={(e) => handleDragStart(day.date, 'breakfast', day.breakfast || 'Pão francês/Doce com manteiga Café com leite', e)}
                                   onDragEnd={handleDragEnd}
@@ -1038,8 +1240,8 @@ export default function MenuEditorPage({ params }: { params: Params }) {
                                   field="colacao"
                                   value={day.colacao}
                                   isEditing={editingCell?.date === day.date && editingCell?.field === 'colacao'}
-                                  isDragging={dragItem?.date === day.date && dragItem?.field === 'colacao'}
-                                  isDropTarget={dropTarget?.date === day.date && dropTarget?.field === 'colacao'}
+                                  isDragging={isCellDragging(day.date, 'colacao')}
+                                  isDropTarget={isCellDropTarget(day.date, 'colacao')}
                                   onToggleEdit={() => toggleEdit(day.date, 'colacao')}
                                   onDragStart={(e) => handleDragStart(day.date, 'colacao', day.colacao, e)}
                                   onDragEnd={handleDragEnd}
@@ -1070,8 +1272,8 @@ export default function MenuEditorPage({ params }: { params: Params }) {
                                   field="breakfastDiabetic"
                                   value={day.breakfastDiabetic}
                                   isEditing={editingCell?.date === day.date && editingCell?.field === 'breakfastDiabetic'}
-                                  isDragging={dragItem?.date === day.date && dragItem?.field === 'breakfastDiabetic'}
-                                  isDropTarget={dropTarget?.date === day.date && dropTarget?.field === 'breakfastDiabetic'}
+                                  isDragging={isCellDragging(day.date, 'breakfastDiabetic')}
+                                  isDropTarget={isCellDropTarget(day.date, 'breakfastDiabetic')}
                                   onToggleEdit={() => toggleEdit(day.date, 'breakfastDiabetic')}
                                   onDragStart={(e) => handleDragStart(day.date, 'breakfastDiabetic', day.breakfastDiabetic, e)}
                                   onDragEnd={handleDragEnd}
@@ -1103,8 +1305,8 @@ export default function MenuEditorPage({ params }: { params: Params }) {
                                   field="breakfastPastoso"
                                   value={day.breakfastPastoso}
                                   isEditing={editingCell?.date === day.date && editingCell?.field === 'breakfastPastoso'}
-                                  isDragging={dragItem?.date === day.date && dragItem?.field === 'breakfastPastoso'}
-                                  isDropTarget={dropTarget?.date === day.date && dropTarget?.field === 'breakfastPastoso'}
+                                  isDragging={isCellDragging(day.date, 'breakfastPastoso')}
+                                  isDropTarget={isCellDropTarget(day.date, 'breakfastPastoso')}
                                   onToggleEdit={() => toggleEdit(day.date, 'breakfastPastoso')}
                                   onDragStart={(e) => handleDragStart(day.date, 'breakfastPastoso', day.breakfastPastoso, e)}
                                   onDragEnd={handleDragEnd}
@@ -1153,8 +1355,8 @@ export default function MenuEditorPage({ params }: { params: Params }) {
                                     field="lunchSide"
                                     value={day.lunchSide}
                                     isEditing={editingCell?.date === day.date && editingCell?.field === 'lunchSide'}
-                                    isDragging={dragItem?.date === day.date && dragItem?.field === 'lunchSide'}
-                                    isDropTarget={dropTarget?.date === day.date && dropTarget?.field === 'lunchSide'}
+                                    isDragging={isCellDragging(day.date, 'lunchSide')}
+                                    isDropTarget={isCellDropTarget(day.date, 'lunchSide')}
                                     onToggleEdit={() => toggleEdit(day.date, 'lunchSide')}
                                     onDragStart={(e) => handleDragStart(day.date, 'lunchSide', day.lunchSide, e)}
                                     onDragEnd={handleDragEnd}
@@ -1184,8 +1386,8 @@ export default function MenuEditorPage({ params }: { params: Params }) {
                                     field="lunchMain"
                                     value={day.lunchMain}
                                     isEditing={editingCell?.date === day.date && editingCell?.field === 'lunchMain'}
-                                    isDragging={dragItem?.date === day.date && dragItem?.field === 'lunchMain'}
-                                    isDropTarget={dropTarget?.date === day.date && dropTarget?.field === 'lunchMain'}
+                                    isDragging={isCellDragging(day.date, 'lunchMain')}
+                                    isDropTarget={isCellDropTarget(day.date, 'lunchMain')}
                                     onToggleEdit={() => toggleEdit(day.date, 'lunchMain')}
                                     onDragStart={(e) => handleDragStart(day.date, 'lunchMain', day.lunchMain, e)}
                                     onDragEnd={handleDragEnd}
@@ -1215,8 +1417,8 @@ export default function MenuEditorPage({ params }: { params: Params }) {
                                     field="lunchSalad"
                                     value={day.lunchSalad}
                                     isEditing={editingCell?.date === day.date && editingCell?.field === 'lunchSalad'}
-                                    isDragging={dragItem?.date === day.date && dragItem?.field === 'lunchSalad'}
-                                    isDropTarget={dropTarget?.date === day.date && dropTarget?.field === 'lunchSalad'}
+                                    isDragging={isCellDragging(day.date, 'lunchSalad')}
+                                    isDropTarget={isCellDropTarget(day.date, 'lunchSalad')}
                                     onToggleEdit={() => toggleEdit(day.date, 'lunchSalad')}
                                     onDragStart={(e) => handleDragStart(day.date, 'lunchSalad', day.lunchSalad, e)}
                                     onDragEnd={handleDragEnd}
@@ -1247,8 +1449,8 @@ export default function MenuEditorPage({ params }: { params: Params }) {
                                     field="juice"
                                     value={day.juice}
                                     isEditing={editingCell?.date === day.date && editingCell?.field === 'juice'}
-                                    isDragging={dragItem?.date === day.date && dragItem?.field === 'juice'}
-                                    isDropTarget={dropTarget?.date === day.date && dropTarget?.field === 'juice'}
+                                    isDragging={isCellDragging(day.date, 'juice')}
+                                    isDropTarget={isCellDropTarget(day.date, 'juice')}
                                     onToggleEdit={() => toggleEdit(day.date, 'juice')}
                                     onDragStart={(e) => handleDragStart(day.date, 'juice', day.juice, e)}
                                     onDragEnd={handleDragEnd}
@@ -1279,8 +1481,8 @@ export default function MenuEditorPage({ params }: { params: Params }) {
                                   field="lunchDiabetic"
                                   value={day.lunchDiabetic ?? 'Colocar mais folhas cruas ½ porção de cada carboidratos, se houver mais de 1 opção.'}
                                   isEditing={editingCell?.date === day.date && editingCell?.field === 'lunchDiabetic'}
-                                  isDragging={dragItem?.date === day.date && dragItem?.field === 'lunchDiabetic'}
-                                  isDropTarget={dropTarget?.date === day.date && dropTarget?.field === 'lunchDiabetic'}
+                                  isDragging={isCellDragging(day.date, 'lunchDiabetic')}
+                                  isDropTarget={isCellDropTarget(day.date, 'lunchDiabetic')}
                                   onToggleEdit={() => toggleEdit(day.date, 'lunchDiabetic')}
                                   onDragStart={(e) => handleDragStart(day.date, 'lunchDiabetic', day.lunchDiabetic ?? 'Colocar mais folhas cruas...', e)}
                                   onDragEnd={handleDragEnd}
@@ -1309,8 +1511,8 @@ export default function MenuEditorPage({ params }: { params: Params }) {
                                   field="lunchPastoso"
                                   value={day.lunchPastoso ?? 'colocar módulo de fibras (1 colher de chá)'}
                                   isEditing={editingCell?.date === day.date && editingCell?.field === 'lunchPastoso'}
-                                  isDragging={dragItem?.date === day.date && dragItem?.field === 'lunchPastoso'}
-                                  isDropTarget={dropTarget?.date === day.date && dropTarget?.field === 'lunchPastoso'}
+                                  isDragging={isCellDragging(day.date, 'lunchPastoso')}
+                                  isDropTarget={isCellDropTarget(day.date, 'lunchPastoso')}
                                   onToggleEdit={() => toggleEdit(day.date, 'lunchPastoso')}
                                   onDragStart={(e) => handleDragStart(day.date, 'lunchPastoso', day.lunchPastoso ?? 'colocar módulo...', e)}
                                   onDragEnd={handleDragEnd}
@@ -1370,14 +1572,48 @@ export default function MenuEditorPage({ params }: { params: Params }) {
                       <th className="border border-slate-400 p-2 text-center font-bold text-xs uppercase w-32">
                         REFEIÇÕES
                       </th>
-                      {week.map((_, dayIdx) => (
-                        <th
-                          key={dayIdx}
-                          className="border border-slate-400 p-2 text-center font-bold text-xs uppercase"
-                        >
-                          CONTINUAÇÃO
-                        </th>
-                      ))}
+                      {week.map((day, dayIdx) => {
+                        if (!day) {
+                          return (
+                            <th key={dayIdx} className="border border-slate-400 p-2 text-center font-bold text-xs uppercase bg-slate-100">
+                              CONTINUAÇÃO
+                            </th>
+                          );
+                        }
+
+                        const dayLabel = getFormattedDayName(day.date);
+                        const isDayDragging = dragItem?.type === 'DAY' && dragItem.date === day.date;
+                        const isDayDropTarget = dropTarget?.date === day.date;
+
+                        return (
+                          <th
+                            key={dayIdx}
+                            draggable
+                            onDragStart={(e) => handleDragDayStart(day.date, dayLabel, e)}
+                            onDragEnd={handleDragEnd}
+                            onDragOver={(e) => handleDragDayOver(day.date, e)}
+                            onDragLeave={(e) => handleDragDayLeave(day.date, e)}
+                            onDrop={(e) => handleDropDay(day.date, e)}
+                            className={`border border-slate-400 p-1.5 text-center font-bold text-xs uppercase cursor-grab active:cursor-grabbing transition-all select-none group relative ${
+                              isDayDragging
+                                ? 'bg-amber-200 opacity-40 ring-2 ring-dashed ring-amber-600 scale-95'
+                                : isDayDropTarget
+                                ? 'bg-emerald-200 ring-2 ring-emerald-500 scale-[1.02] shadow-md border-emerald-600'
+                                : 'hover:bg-amber-50 bg-slate-200'
+                            }`}
+                            title="Arraste este dia para trocar TODAS as refeições com outro dia"
+                          >
+                            <div className="flex items-center justify-center gap-1 text-[10px] text-amber-900 font-semibold mb-0.5 no-print opacity-70 group-hover:opacity-100 transition-opacity">
+                              <GripVertical className="w-3.5 h-3.5 text-amber-700 shrink-0" />
+                              <span className="text-[9px] tracking-tight">MOVER DIA</span>
+                            </div>
+                            <div>{DAY_NAMES_FULL[dayIdx]}</div>
+                            <div className="text-[11px] font-extrabold text-emerald-800">
+                              {format(parse(day.date, 'yyyy-MM-dd', new Date()), 'dd/MM')}
+                            </div>
+                          </th>
+                        );
+                      })}
                     </tr>
                   </thead>
                   <tbody>
@@ -1398,8 +1634,8 @@ export default function MenuEditorPage({ params }: { params: Params }) {
                                   field="afternoonSnack"
                                   value={day.afternoonSnack}
                                   isEditing={editingCell?.date === day.date && editingCell?.field === 'afternoonSnack'}
-                                  isDragging={dragItem?.date === day.date && dragItem?.field === 'afternoonSnack'}
-                                  isDropTarget={dropTarget?.date === day.date && dropTarget?.field === 'afternoonSnack'}
+                                  isDragging={isCellDragging(day.date, 'afternoonSnack')}
+                                  isDropTarget={isCellDropTarget(day.date, 'afternoonSnack')}
                                   onToggleEdit={() => toggleEdit(day.date, 'afternoonSnack')}
                                   onDragStart={(e) => handleDragStart(day.date, 'afternoonSnack', day.afternoonSnack, e)}
                                   onDragEnd={handleDragEnd}
@@ -1429,8 +1665,8 @@ export default function MenuEditorPage({ params }: { params: Params }) {
                                   field="afternoonSnackDiabetic"
                                   value={day.afternoonSnackDiabetic ?? 'Escolher 3 opções: Queijo, Ovo, pão integral, banana cozida com canela e farelo de aveia, batata doce, aipim com queijo minas, café com leite e adoçante, Iogurte diet.'}
                                   isEditing={editingCell?.date === day.date && editingCell?.field === 'afternoonSnackDiabetic'}
-                                  isDragging={dragItem?.date === day.date && dragItem?.field === 'afternoonSnackDiabetic'}
-                                  isDropTarget={dropTarget?.date === day.date && dropTarget?.field === 'afternoonSnackDiabetic'}
+                                  isDragging={isCellDragging(day.date, 'afternoonSnackDiabetic')}
+                                  isDropTarget={isCellDropTarget(day.date, 'afternoonSnackDiabetic')}
                                   onToggleEdit={() => toggleEdit(day.date, 'afternoonSnackDiabetic')}
                                   onDragStart={(e) => handleDragStart(day.date, 'afternoonSnackDiabetic', day.afternoonSnackDiabetic ?? 'Escolher 3 opções...', e)}
                                   onDragEnd={handleDragEnd}
@@ -1475,8 +1711,8 @@ export default function MenuEditorPage({ params }: { params: Params }) {
                                   field="dinner"
                                   value={day.dinner}
                                   isEditing={editingCell?.date === day.date && editingCell?.field === 'dinner'}
-                                  isDragging={dragItem?.date === day.date && dragItem?.field === 'dinner'}
-                                  isDropTarget={dropTarget?.date === day.date && dropTarget?.field === 'dinner'}
+                                  isDragging={isCellDragging(day.date, 'dinner')}
+                                  isDropTarget={isCellDropTarget(day.date, 'dinner')}
                                   onToggleEdit={() => toggleEdit(day.date, 'dinner')}
                                   onDragStart={(e) => handleDragStart(day.date, 'dinner', day.dinner, e)}
                                   onDragEnd={handleDragEnd}
@@ -1506,8 +1742,8 @@ export default function MenuEditorPage({ params }: { params: Params }) {
                                   field="dinnerDiabetic"
                                   value={day.dinnerDiabetic || 'Repetir o almoço...'}
                                   isEditing={editingCell?.date === day.date && editingCell?.field === 'dinnerDiabetic'}
-                                  isDragging={dragItem?.date === day.date && dragItem?.field === 'dinnerDiabetic'}
-                                  isDropTarget={dropTarget?.date === day.date && dropTarget?.field === 'dinnerDiabetic'}
+                                  isDragging={isCellDragging(day.date, 'dinnerDiabetic')}
+                                  isDropTarget={isCellDropTarget(day.date, 'dinnerDiabetic')}
                                   onToggleEdit={() => toggleEdit(day.date, 'dinnerDiabetic')}
                                   onDragStart={(e) => handleDragStart(day.date, 'dinnerDiabetic', day.dinnerDiabetic || 'Repetir o almoço...', e)}
                                   onDragEnd={handleDragEnd}
@@ -1552,8 +1788,8 @@ export default function MenuEditorPage({ params }: { params: Params }) {
                                   field="supper"
                                   value={day.supper}
                                   isEditing={editingCell?.date === day.date && editingCell?.field === 'supper'}
-                                  isDragging={dragItem?.date === day.date && dragItem?.field === 'supper'}
-                                  isDropTarget={dropTarget?.date === day.date && dropTarget?.field === 'supper'}
+                                  isDragging={isCellDragging(day.date, 'supper')}
+                                  isDropTarget={isCellDropTarget(day.date, 'supper')}
                                   onToggleEdit={() => toggleEdit(day.date, 'supper')}
                                   onDragStart={(e) => handleDragStart(day.date, 'supper', day.supper, e)}
                                   onDragEnd={handleDragEnd}
@@ -1583,8 +1819,8 @@ export default function MenuEditorPage({ params }: { params: Params }) {
                                   field="supperDiabetic"
                                   value={day.supperDiabetic ?? 'Mingau de aveia...'}
                                   isEditing={editingCell?.date === day.date && editingCell?.field === 'supperDiabetic'}
-                                  isDragging={dragItem?.date === day.date && dragItem?.field === 'supperDiabetic'}
-                                  isDropTarget={dropTarget?.date === day.date && dropTarget?.field === 'supperDiabetic'}
+                                  isDragging={isCellDragging(day.date, 'supperDiabetic')}
+                                  isDropTarget={isCellDropTarget(day.date, 'supperDiabetic')}
                                   onToggleEdit={() => toggleEdit(day.date, 'supperDiabetic')}
                                   onDragStart={(e) => handleDragStart(day.date, 'supperDiabetic', day.supperDiabetic ?? 'Mingau...', e)}
                                   onDragEnd={handleDragEnd}
