@@ -202,23 +202,11 @@ function CreatableInlineDropdown({
 // ============================================================================
 // Draggable Cell wrapper for drag and drop item swap
 // ============================================================================
-function DraggableCell({
-  date,
-  field,
-  value,
-  isEditing,
-  isDragging,
-  isDropTarget,
-  onToggleEdit,
-  onDragStart,
-  onDragEnd,
-  onDragOver,
-  onDragLeave,
-  onDrop,
-  editComponent,
-  children,
-  className = '',
-}: {
+// ============================================================================
+// Draggable Cell wrapper for drag and drop item swap
+// ============================================================================
+interface DraggableCellProps {
+  as?: 'span' | 'div' | 'p';
   date: string;
   field: keyof DailyMeal;
   value: string;
@@ -234,13 +222,40 @@ function DraggableCell({
   editComponent: React.ReactNode;
   children: React.ReactNode;
   className?: string;
-}) {
+  icon?: React.ReactNode;
+}
+
+function DraggableCell({
+  as: Component = 'span',
+  date,
+  field,
+  value,
+  isEditing,
+  isDragging,
+  isDropTarget,
+  onToggleEdit,
+  onDragStart,
+  onDragEnd,
+  onDragOver,
+  onDragLeave,
+  onDrop,
+  editComponent,
+  children,
+  className = '',
+  icon,
+}: DraggableCellProps) {
   if (isEditing) {
     return <div onClick={(e) => e.stopPropagation()}>{editComponent}</div>;
   }
 
+  const dragStyles = isDragging
+    ? 'opacity-30 ring-2 ring-dashed ring-emerald-600 bg-emerald-100 scale-95 shadow-inner'
+    : isDropTarget
+    ? 'bg-amber-200 ring-2 ring-amber-500 scale-[1.02] shadow-md z-20 font-bold border border-amber-600'
+    : '';
+
   return (
-    <div
+    <Component
       draggable={!isEditing}
       onDragStart={onDragStart}
       onDragEnd={onDragEnd}
@@ -251,19 +266,16 @@ function DraggableCell({
         e.stopPropagation();
         onToggleEdit();
       }}
-      className={`group relative inline-flex items-center gap-1 rounded px-1 py-0.5 transition-all duration-150 cursor-grab active:cursor-grabbing select-none ${
-        isDragging
-          ? 'opacity-30 border-2 border-dashed border-emerald-600 bg-emerald-100 scale-95 shadow-inner'
-          : isDropTarget
-          ? 'bg-amber-200 ring-2 ring-amber-500 scale-[1.03] shadow-md z-20 font-bold border border-amber-600'
-          : 'hover:bg-amber-100/90 hover:shadow-xs'
-      } ${className}`}
-      title="Clique para editar ou arraste para trocar de lugar com outro prato/refeição"
+      className={`cursor-grab active:cursor-grabbing transition-all duration-150 ${dragStyles} ${className}`}
+      title="Clique para editar ou arraste para trocar de lugar"
     >
-      <GripVertical className="w-2.5 h-2.5 text-slate-400 opacity-0 group-hover:opacity-100 transition-opacity shrink-0 no-print" />
-      <span className="truncate">{children}</span>
-      <Pencil className="w-2 h-2 text-slate-400 opacity-0 group-hover:opacity-70 transition-opacity shrink-0 no-print" />
-    </div>
+      {children}
+      {icon !== undefined ? (
+        icon
+      ) : (
+        <Pencil className="w-2.5 h-2.5 inline ml-1 opacity-40 no-print shrink-0" />
+      )}
+    </Component>
   );
 }
 
@@ -992,8 +1004,9 @@ export default function MenuEditorPage({ params }: { params: Params }) {
                           {day && (
                             <div className="space-y-2">
                               {/* Main Breakfast & Fruit Dropdown */}
-                              <div className="text-[11px] leading-tight flex flex-wrap items-center gap-1">
+                              <div className="text-[11px] leading-tight">
                                 <DraggableCell
+                                  as="span"
                                   date={day.date}
                                   field="breakfast"
                                   value={day.breakfast || 'Pão francês/Doce com manteiga Café com leite'}
@@ -1006,6 +1019,7 @@ export default function MenuEditorPage({ params }: { params: Params }) {
                                   onDragOver={(e) => handleDragOver(day.date, 'breakfast', e)}
                                   onDragLeave={(e) => handleDragLeave(day.date, 'breakfast', e)}
                                   onDrop={(e) => handleDrop(day.date, 'breakfast', e)}
+                                  className="editable-cell cursor-pointer hover:bg-amber-100 rounded px-0.5 inline-block"
                                   editComponent={
                                     <CreatableInlineDropdown
                                       options={getOptionsForField('breakfast')}
@@ -1017,9 +1031,9 @@ export default function MenuEditorPage({ params }: { params: Params }) {
                                   }
                                 >
                                   {day.breakfast || 'Pão francês/Doce com manteiga Café com leite'}
-                                </DraggableCell>
-
+                                </DraggableCell>{' '}
                                 <DraggableCell
+                                  as="span"
                                   date={day.date}
                                   field="colacao"
                                   value={day.colacao}
@@ -1032,7 +1046,7 @@ export default function MenuEditorPage({ params }: { params: Params }) {
                                   onDragOver={(e) => handleDragOver(day.date, 'colacao', e)}
                                   onDragLeave={(e) => handleDragLeave(day.date, 'colacao', e)}
                                   onDrop={(e) => handleDrop(day.date, 'colacao', e)}
-                                  className="text-amber-700 font-bold"
+                                  className="editable-cell text-amber-700 font-bold px-0.5 py-0.2 rounded hover:bg-amber-100 transition-colors inline-block"
                                   editComponent={
                                     <CreatableInlineDropdown
                                       options={getOptionsForField('colacao')}
@@ -1048,9 +1062,10 @@ export default function MenuEditorPage({ params }: { params: Params }) {
                               </div>
 
                               {/* Diabéticos Note Dropdown */}
-                              <div className="text-[10px] leading-tight text-red-800 flex items-center gap-1">
-                                <span className="font-bold shrink-0">Diabéticos:</span>
+                              <div className="text-[10px] leading-tight text-red-800">
+                                <span className="font-bold">Diabéticos:</span>{' '}
                                 <DraggableCell
+                                  as="span"
                                   date={day.date}
                                   field="breakfastDiabetic"
                                   value={day.breakfastDiabetic}
@@ -1063,6 +1078,8 @@ export default function MenuEditorPage({ params }: { params: Params }) {
                                   onDragOver={(e) => handleDragOver(day.date, 'breakfastDiabetic', e)}
                                   onDragLeave={(e) => handleDragLeave(day.date, 'breakfastDiabetic', e)}
                                   onDrop={(e) => handleDrop(day.date, 'breakfastDiabetic', e)}
+                                  className="editable-cell hover:bg-red-100 rounded px-0.5 inline-block cursor-pointer"
+                                  icon={<Pencil className="w-2 h-2 inline ml-1 opacity-40 no-print shrink-0" />}
                                   editComponent={
                                     <CreatableInlineDropdown
                                       options={getOptionsForField('breakfastDiabetic')}
@@ -1079,34 +1096,35 @@ export default function MenuEditorPage({ params }: { params: Params }) {
 
                               {/* Pastosos Note Dropdown */}
                               <div className="text-[10px] leading-tight text-red-900">
-                                <div className="flex items-center gap-1">
-                                  <span className="font-bold shrink-0">PASTOSOS:</span>
-                                  <DraggableCell
-                                    date={day.date}
-                                    field="breakfastPastoso"
-                                    value={day.breakfastPastoso}
-                                    isEditing={editingCell?.date === day.date && editingCell?.field === 'breakfastPastoso'}
-                                    isDragging={dragItem?.date === day.date && dragItem?.field === 'breakfastPastoso'}
-                                    isDropTarget={dropTarget?.date === day.date && dropTarget?.field === 'breakfastPastoso'}
-                                    onToggleEdit={() => toggleEdit(day.date, 'breakfastPastoso')}
-                                    onDragStart={(e) => handleDragStart(day.date, 'breakfastPastoso', day.breakfastPastoso, e)}
-                                    onDragEnd={handleDragEnd}
-                                    onDragOver={(e) => handleDragOver(day.date, 'breakfastPastoso', e)}
-                                    onDragLeave={(e) => handleDragLeave(day.date, 'breakfastPastoso', e)}
-                                    onDrop={(e) => handleDrop(day.date, 'breakfastPastoso', e)}
-                                    editComponent={
-                                      <CreatableInlineDropdown
-                                        options={getOptionsForField('breakfastPastoso')}
-                                        value={day.breakfastPastoso}
-                                        onSelect={(val) => updateDailyMealField(day.date, 'breakfastPastoso', val)}
-                                        onClose={() => setEditingCell(null)}
-                                        placeholder="Digite ou selecione..."
-                                      />
-                                    }
-                                  >
-                                    {day.breakfastPastoso}
-                                  </DraggableCell>
-                                </div>
+                                <span className="font-bold">PASTOSOS:</span>{' '}
+                                <DraggableCell
+                                  as="span"
+                                  date={day.date}
+                                  field="breakfastPastoso"
+                                  value={day.breakfastPastoso}
+                                  isEditing={editingCell?.date === day.date && editingCell?.field === 'breakfastPastoso'}
+                                  isDragging={dragItem?.date === day.date && dragItem?.field === 'breakfastPastoso'}
+                                  isDropTarget={dropTarget?.date === day.date && dropTarget?.field === 'breakfastPastoso'}
+                                  onToggleEdit={() => toggleEdit(day.date, 'breakfastPastoso')}
+                                  onDragStart={(e) => handleDragStart(day.date, 'breakfastPastoso', day.breakfastPastoso, e)}
+                                  onDragEnd={handleDragEnd}
+                                  onDragOver={(e) => handleDragOver(day.date, 'breakfastPastoso', e)}
+                                  onDragLeave={(e) => handleDragLeave(day.date, 'breakfastPastoso', e)}
+                                  onDrop={(e) => handleDrop(day.date, 'breakfastPastoso', e)}
+                                  className="editable-cell hover:bg-red-100 rounded px-0.5 inline-block cursor-pointer"
+                                  icon={<Pencil className="w-2 h-2 inline ml-1 opacity-40 no-print shrink-0" />}
+                                  editComponent={
+                                    <CreatableInlineDropdown
+                                      options={getOptionsForField('breakfastPastoso')}
+                                      value={day.breakfastPastoso}
+                                      onSelect={(val) => updateDailyMealField(day.date, 'breakfastPastoso', val)}
+                                      onClose={() => setEditingCell(null)}
+                                      placeholder="Digite ou selecione..."
+                                    />
+                                  }
+                                >
+                                  {day.breakfastPastoso}
+                                </DraggableCell>{' '}
                                 <span className="font-bold uppercase text-[9px] block mt-0.5">
                                   ( FAZER PARA LANCHE DA TARDE TAMBÉM)
                                 </span>
@@ -1128,8 +1146,9 @@ export default function MenuEditorPage({ params }: { params: Params }) {
                             <div className="space-y-2">
                               <div className="text-[11px] leading-tight space-y-1">
                                 {/* Editable Lunch Side */}
-                                <div>
+                                <div className="editable-cell p-0.5 rounded -mx-0.5">
                                   <DraggableCell
+                                    as="span"
                                     date={day.date}
                                     field="lunchSide"
                                     value={day.lunchSide}
@@ -1142,6 +1161,7 @@ export default function MenuEditorPage({ params }: { params: Params }) {
                                     onDragOver={(e) => handleDragOver(day.date, 'lunchSide', e)}
                                     onDragLeave={(e) => handleDragLeave(day.date, 'lunchSide', e)}
                                     onDrop={(e) => handleDrop(day.date, 'lunchSide', e)}
+                                    className="cursor-pointer hover:bg-emerald-100 rounded px-0.5 transition-colors inline-block"
                                     editComponent={
                                       <CreatableInlineDropdown
                                         options={getOptionsForField('lunchSide')}
@@ -1157,8 +1177,9 @@ export default function MenuEditorPage({ params }: { params: Params }) {
                                 </div>
 
                                 {/* Editable Protein (Main Dish e.g. Filé Empanado / Bife a Cavalo) */}
-                                <div>
+                                <div className="editable-cell p-0.5 rounded -mx-0.5">
                                   <DraggableCell
+                                    as="span"
                                     date={day.date}
                                     field="lunchMain"
                                     value={day.lunchMain}
@@ -1171,7 +1192,7 @@ export default function MenuEditorPage({ params }: { params: Params }) {
                                     onDragOver={(e) => handleDragOver(day.date, 'lunchMain', e)}
                                     onDragLeave={(e) => handleDragLeave(day.date, 'lunchMain', e)}
                                     onDrop={(e) => handleDrop(day.date, 'lunchMain', e)}
-                                    className="font-bold uppercase text-black"
+                                    className="font-bold uppercase text-black cursor-pointer hover:bg-amber-100 rounded px-0.5 transition-colors inline-block"
                                     editComponent={
                                       <CreatableInlineDropdown
                                         options={getOptionsForField('lunchMain')}
@@ -1187,8 +1208,9 @@ export default function MenuEditorPage({ params }: { params: Params }) {
                                 </div>
 
                                 {/* Editable Salad */}
-                                <div>
+                                <div className="editable-cell p-0.5 rounded -mx-0.5">
                                   <DraggableCell
+                                    as="span"
                                     date={day.date}
                                     field="lunchSalad"
                                     value={day.lunchSalad}
@@ -1201,6 +1223,8 @@ export default function MenuEditorPage({ params }: { params: Params }) {
                                     onDragOver={(e) => handleDragOver(day.date, 'lunchSalad', e)}
                                     onDragLeave={(e) => handleDragLeave(day.date, 'lunchSalad', e)}
                                     onDrop={(e) => handleDrop(day.date, 'lunchSalad', e)}
+                                    className="cursor-pointer hover:bg-green-100 rounded px-0.5 transition-colors inline-block"
+                                    icon={<Salad className="w-2.5 h-2.5 inline ml-1 opacity-40 no-print shrink-0" />}
                                     editComponent={
                                       <CreatableInlineDropdown
                                         options={getOptionsForField('lunchSalad')}
@@ -1212,13 +1236,13 @@ export default function MenuEditorPage({ params }: { params: Params }) {
                                     }
                                   >
                                     {day.lunchSalad}
-                                    <Salad className="w-2.5 h-2.5 inline ml-1 opacity-40 no-print" />
                                   </DraggableCell>
                                 </div>
 
                                 {/* Editable Juice */}
-                                <div>
+                                <div className="editable-cell p-0.5 rounded -mx-0.5">
                                   <DraggableCell
+                                    as="span"
                                     date={day.date}
                                     field="juice"
                                     value={day.juice}
@@ -1231,7 +1255,7 @@ export default function MenuEditorPage({ params }: { params: Params }) {
                                     onDragOver={(e) => handleDragOver(day.date, 'juice', e)}
                                     onDragLeave={(e) => handleDragLeave(day.date, 'juice', e)}
                                     onDrop={(e) => handleDrop(day.date, 'juice', e)}
-                                    className="text-slate-800"
+                                    className="text-slate-800 cursor-pointer hover:bg-yellow-100 rounded px-0.5 transition-colors inline-block"
                                     editComponent={
                                       <CreatableInlineDropdown
                                         options={getOptionsForField('juice')}
@@ -1249,63 +1273,65 @@ export default function MenuEditorPage({ params }: { params: Params }) {
 
                               {/* Diabéticos & Pastosos notes */}
                               <div className="pt-1 border-t border-slate-200 text-[9.5px] leading-tight text-slate-700 space-y-1">
-                                <div className="flex items-center gap-1">
-                                  <span className="font-bold text-red-800 shrink-0">Diabéticos:</span>
-                                  <DraggableCell
-                                    date={day.date}
-                                    field="lunchDiabetic"
-                                    value={day.lunchDiabetic ?? 'Colocar mais folhas cruas ½ porção de cada carboidratos, se houver mais de 1 opção.'}
-                                    isEditing={editingCell?.date === day.date && editingCell?.field === 'lunchDiabetic'}
-                                    isDragging={dragItem?.date === day.date && dragItem?.field === 'lunchDiabetic'}
-                                    isDropTarget={dropTarget?.date === day.date && dropTarget?.field === 'lunchDiabetic'}
-                                    onToggleEdit={() => toggleEdit(day.date, 'lunchDiabetic')}
-                                    onDragStart={(e) => handleDragStart(day.date, 'lunchDiabetic', day.lunchDiabetic ?? 'Colocar mais folhas cruas...', e)}
-                                    onDragEnd={handleDragEnd}
-                                    onDragOver={(e) => handleDragOver(day.date, 'lunchDiabetic', e)}
-                                    onDragLeave={(e) => handleDragLeave(day.date, 'lunchDiabetic', e)}
-                                    onDrop={(e) => handleDrop(day.date, 'lunchDiabetic', e)}
-                                    editComponent={
-                                      <CreatableInlineDropdown
-                                        options={getOptionsForField('lunchDiabetic')}
-                                        value={day.lunchDiabetic ?? 'Colocar mais folhas cruas ½ porção de cada carboidratos, se houver mais de 1 opção.'}
-                                        onSelect={(val) => updateDailyMealField(day.date, 'lunchDiabetic', val)}
-                                        onClose={() => setEditingCell(null)}
-                                        placeholder="Digite ou selecione..."
-                                      />
-                                    }
-                                  >
-                                    {day.lunchDiabetic ?? 'Colocar mais folhas cruas ½ porção de cada carboidratos, se houver mais de 1 opção.'}
-                                  </DraggableCell>
-                                </div>
+                                <DraggableCell
+                                  as="div"
+                                  date={day.date}
+                                  field="lunchDiabetic"
+                                  value={day.lunchDiabetic ?? 'Colocar mais folhas cruas ½ porção de cada carboidratos, se houver mais de 1 opção.'}
+                                  isEditing={editingCell?.date === day.date && editingCell?.field === 'lunchDiabetic'}
+                                  isDragging={dragItem?.date === day.date && dragItem?.field === 'lunchDiabetic'}
+                                  isDropTarget={dropTarget?.date === day.date && dropTarget?.field === 'lunchDiabetic'}
+                                  onToggleEdit={() => toggleEdit(day.date, 'lunchDiabetic')}
+                                  onDragStart={(e) => handleDragStart(day.date, 'lunchDiabetic', day.lunchDiabetic ?? 'Colocar mais folhas cruas...', e)}
+                                  onDragEnd={handleDragEnd}
+                                  onDragOver={(e) => handleDragOver(day.date, 'lunchDiabetic', e)}
+                                  onDragLeave={(e) => handleDragLeave(day.date, 'lunchDiabetic', e)}
+                                  onDrop={(e) => handleDrop(day.date, 'lunchDiabetic', e)}
+                                  className="editable-cell cursor-pointer hover:bg-red-50 rounded px-0.5"
+                                  icon={<Pencil className="w-2 h-2 inline ml-1 opacity-40 no-print shrink-0" />}
+                                  editComponent={
+                                    <CreatableInlineDropdown
+                                      options={getOptionsForField('lunchDiabetic')}
+                                      value={day.lunchDiabetic ?? 'Colocar mais folhas cruas ½ porção de cada carboidratos, se houver mais de 1 opção.'}
+                                      onSelect={(val) => updateDailyMealField(day.date, 'lunchDiabetic', val)}
+                                      onClose={() => setEditingCell(null)}
+                                      placeholder="Digite ou selecione..."
+                                    />
+                                  }
+                                >
+                                  <span className="font-bold text-red-800">Diabéticos:</span>{' '}
+                                  {day.lunchDiabetic ?? 'Colocar mais folhas cruas ½ porção de cada carboidratos, se houver mais de 1 opção.'}
+                                </DraggableCell>
 
-                                <div className="flex items-center gap-1">
-                                  <span className="font-bold text-red-900 shrink-0">Pastoso:</span>
-                                  <DraggableCell
-                                    date={day.date}
-                                    field="lunchPastoso"
-                                    value={day.lunchPastoso ?? 'colocar módulo de fibras (1 colher de chá)'}
-                                    isEditing={editingCell?.date === day.date && editingCell?.field === 'lunchPastoso'}
-                                    isDragging={dragItem?.date === day.date && dragItem?.field === 'lunchPastoso'}
-                                    isDropTarget={dropTarget?.date === day.date && dropTarget?.field === 'lunchPastoso'}
-                                    onToggleEdit={() => toggleEdit(day.date, 'lunchPastoso')}
-                                    onDragStart={(e) => handleDragStart(day.date, 'lunchPastoso', day.lunchPastoso ?? 'colocar módulo...', e)}
-                                    onDragEnd={handleDragEnd}
-                                    onDragOver={(e) => handleDragOver(day.date, 'lunchPastoso', e)}
-                                    onDragLeave={(e) => handleDragLeave(day.date, 'lunchPastoso', e)}
-                                    onDrop={(e) => handleDrop(day.date, 'lunchPastoso', e)}
-                                    editComponent={
-                                      <CreatableInlineDropdown
-                                        options={getOptionsForField('lunchPastoso')}
-                                        value={day.lunchPastoso ?? 'colocar módulo de fibras (1 colher de chá)'}
-                                        onSelect={(val) => updateDailyMealField(day.date, 'lunchPastoso', val)}
-                                        onClose={() => setEditingCell(null)}
-                                        placeholder="Digite ou selecione..."
-                                      />
-                                    }
-                                  >
-                                    {day.lunchPastoso ?? 'colocar módulo de fibras (1 colher de chá)'}
-                                  </DraggableCell>
-                                </div>
+                                <DraggableCell
+                                  as="div"
+                                  date={day.date}
+                                  field="lunchPastoso"
+                                  value={day.lunchPastoso ?? 'colocar módulo de fibras (1 colher de chá)'}
+                                  isEditing={editingCell?.date === day.date && editingCell?.field === 'lunchPastoso'}
+                                  isDragging={dragItem?.date === day.date && dragItem?.field === 'lunchPastoso'}
+                                  isDropTarget={dropTarget?.date === day.date && dropTarget?.field === 'lunchPastoso'}
+                                  onToggleEdit={() => toggleEdit(day.date, 'lunchPastoso')}
+                                  onDragStart={(e) => handleDragStart(day.date, 'lunchPastoso', day.lunchPastoso ?? 'colocar módulo...', e)}
+                                  onDragEnd={handleDragEnd}
+                                  onDragOver={(e) => handleDragOver(day.date, 'lunchPastoso', e)}
+                                  onDragLeave={(e) => handleDragLeave(day.date, 'lunchPastoso', e)}
+                                  onDrop={(e) => handleDrop(day.date, 'lunchPastoso', e)}
+                                  className="editable-cell cursor-pointer hover:bg-red-50 rounded px-0.5"
+                                  icon={<Pencil className="w-2 h-2 inline ml-1 opacity-40 no-print shrink-0" />}
+                                  editComponent={
+                                    <CreatableInlineDropdown
+                                      options={getOptionsForField('lunchPastoso')}
+                                      value={day.lunchPastoso ?? 'colocar módulo de fibras (1 colher de chá)'}
+                                      onSelect={(val) => updateDailyMealField(day.date, 'lunchPastoso', val)}
+                                      onClose={() => setEditingCell(null)}
+                                      placeholder="Digite ou selecione..."
+                                    />
+                                  }
+                                >
+                                  <span className="font-bold text-red-900">Pastoso:</span>{' '}
+                                  {day.lunchPastoso ?? 'colocar módulo de fibras (1 colher de chá)'}
+                                </DraggableCell>
                               </div>
                             </div>
                           )}
@@ -1363,10 +1389,11 @@ export default function MenuEditorPage({ params }: { params: Params }) {
                       {week.map((day, dayIdx) => (
                         <td key={dayIdx} className="border border-slate-400 p-2 align-top bg-white">
                           {day && (
-                            <div className="space-y-2">
+                            <div className="space-y-1.5">
                               {/* Editable Afternoon Snack */}
-                              <div>
+                              <div className="editable-cell p-0.5 rounded -mx-0.5">
                                 <DraggableCell
+                                  as="p"
                                   date={day.date}
                                   field="afternoonSnack"
                                   value={day.afternoonSnack}
@@ -1379,6 +1406,7 @@ export default function MenuEditorPage({ params }: { params: Params }) {
                                   onDragOver={(e) => handleDragOver(day.date, 'afternoonSnack', e)}
                                   onDragLeave={(e) => handleDragLeave(day.date, 'afternoonSnack', e)}
                                   onDrop={(e) => handleDrop(day.date, 'afternoonSnack', e)}
+                                  className="text-[11px] leading-tight cursor-pointer hover:bg-amber-100 rounded px-0.5 transition-colors font-medium"
                                   editComponent={
                                     <CreatableInlineDropdown
                                       options={getOptionsForField('afternoonSnack')}
@@ -1393,21 +1421,24 @@ export default function MenuEditorPage({ params }: { params: Params }) {
                                 </DraggableCell>
                               </div>
 
-                              <div className="text-[9.5px] leading-tight text-red-800 flex items-center gap-1">
-                                <span className="font-bold shrink-0">Diabéticos:</span>
+                              <div className="text-[9.5px] leading-tight text-red-800">
+                                <span className="font-bold">Diabéticos:</span>{' '}
                                 <DraggableCell
+                                  as="span"
                                   date={day.date}
                                   field="afternoonSnackDiabetic"
-                                  value={day.afternoonSnackDiabetic}
+                                  value={day.afternoonSnackDiabetic ?? 'Escolher 3 opções: Queijo, Ovo, pão integral, banana cozida com canela e farelo de aveia, batata doce, aipim com queijo minas, café com leite e adoçante, Iogurte diet.'}
                                   isEditing={editingCell?.date === day.date && editingCell?.field === 'afternoonSnackDiabetic'}
                                   isDragging={dragItem?.date === day.date && dragItem?.field === 'afternoonSnackDiabetic'}
                                   isDropTarget={dropTarget?.date === day.date && dropTarget?.field === 'afternoonSnackDiabetic'}
                                   onToggleEdit={() => toggleEdit(day.date, 'afternoonSnackDiabetic')}
-                                  onDragStart={(e) => handleDragStart(day.date, 'afternoonSnackDiabetic', day.afternoonSnackDiabetic, e)}
+                                  onDragStart={(e) => handleDragStart(day.date, 'afternoonSnackDiabetic', day.afternoonSnackDiabetic ?? 'Escolher 3 opções...', e)}
                                   onDragEnd={handleDragEnd}
                                   onDragOver={(e) => handleDragOver(day.date, 'afternoonSnackDiabetic', e)}
                                   onDragLeave={(e) => handleDragLeave(day.date, 'afternoonSnackDiabetic', e)}
                                   onDrop={(e) => handleDrop(day.date, 'afternoonSnackDiabetic', e)}
+                                  className="editable-cell hover:bg-amber-100 rounded px-0.5 inline-block cursor-pointer"
+                                  icon={<Pencil className="w-2 h-2 inline ml-1 opacity-40 no-print shrink-0" />}
                                   editComponent={
                                     <CreatableInlineDropdown
                                       options={getOptionsForField('afternoonSnackDiabetic')}
@@ -1418,7 +1449,7 @@ export default function MenuEditorPage({ params }: { params: Params }) {
                                     />
                                   }
                                 >
-                                  {day.afternoonSnackDiabetic}
+                                  {day.afternoonSnackDiabetic ?? 'Escolher 3 opções: Queijo, Ovo, pão integral, banana cozida com canela e farelo de aveia, batata doce, aipim com queijo minas, café com leite e adoçante, Iogurte diet.'}
                                 </DraggableCell>
                               </div>
                             </div>
@@ -1435,10 +1466,11 @@ export default function MenuEditorPage({ params }: { params: Params }) {
                       {week.map((day, dayIdx) => (
                         <td key={dayIdx} className="border border-slate-400 p-2 align-top bg-white">
                           {day && (
-                            <div className="space-y-2">
+                            <div className="space-y-1.5">
                               {/* Editable Dinner */}
-                              <div>
+                              <div className="editable-cell p-0.5 rounded -mx-0.5">
                                 <DraggableCell
+                                  as="p"
                                   date={day.date}
                                   field="dinner"
                                   value={day.dinner}
@@ -1451,6 +1483,7 @@ export default function MenuEditorPage({ params }: { params: Params }) {
                                   onDragOver={(e) => handleDragOver(day.date, 'dinner', e)}
                                   onDragLeave={(e) => handleDragLeave(day.date, 'dinner', e)}
                                   onDrop={(e) => handleDrop(day.date, 'dinner', e)}
+                                  className="text-[11px] leading-tight font-semibold uppercase text-slate-900 cursor-pointer hover:bg-orange-100 rounded px-0.5 transition-colors"
                                   editComponent={
                                     <CreatableInlineDropdown
                                       options={getOptionsForField('dinner')}
@@ -1465,9 +1498,10 @@ export default function MenuEditorPage({ params }: { params: Params }) {
                                 </DraggableCell>
                               </div>
 
-                              <div className="text-[9.5px] leading-tight text-red-800 flex items-center gap-1">
-                                <span className="font-bold shrink-0">Diabéticos:</span>
+                              <div className="text-[9.5px] leading-tight text-red-800">
+                                <span className="font-bold">Diabéticos:</span>{' '}
                                 <DraggableCell
+                                  as="span"
                                   date={day.date}
                                   field="dinnerDiabetic"
                                   value={day.dinnerDiabetic || 'Repetir o almoço...'}
@@ -1480,6 +1514,8 @@ export default function MenuEditorPage({ params }: { params: Params }) {
                                   onDragOver={(e) => handleDragOver(day.date, 'dinnerDiabetic', e)}
                                   onDragLeave={(e) => handleDragLeave(day.date, 'dinnerDiabetic', e)}
                                   onDrop={(e) => handleDrop(day.date, 'dinnerDiabetic', e)}
+                                  className="editable-cell hover:bg-orange-100 rounded px-0.5 inline-block cursor-pointer"
+                                  icon={<Pencil className="w-2 h-2 inline ml-1 opacity-40 no-print shrink-0" />}
                                   editComponent={
                                     <CreatableInlineDropdown
                                       options={getOptionsForField('dinnerDiabetic')}
@@ -1509,8 +1545,9 @@ export default function MenuEditorPage({ params }: { params: Params }) {
                           {day && (
                             <div className="space-y-2">
                               {/* Editable Supper */}
-                              <div>
+                              <div className="editable-cell p-0.5 rounded -mx-0.5">
                                 <DraggableCell
+                                  as="p"
                                   date={day.date}
                                   field="supper"
                                   value={day.supper}
@@ -1523,6 +1560,7 @@ export default function MenuEditorPage({ params }: { params: Params }) {
                                   onDragOver={(e) => handleDragOver(day.date, 'supper', e)}
                                   onDragLeave={(e) => handleDragLeave(day.date, 'supper', e)}
                                   onDrop={(e) => handleDrop(day.date, 'supper', e)}
+                                  className="text-[11px] leading-tight cursor-pointer hover:bg-purple-100 rounded px-0.5 transition-colors"
                                   editComponent={
                                     <CreatableInlineDropdown
                                       options={getOptionsForField('supper')}
@@ -1537,9 +1575,10 @@ export default function MenuEditorPage({ params }: { params: Params }) {
                                 </DraggableCell>
                               </div>
 
-                              <div className="text-[9.5px] leading-tight text-red-800 flex items-center gap-1">
-                                <span className="font-bold shrink-0">Diabéticos:</span>
+                              <div className="text-[9.5px] leading-tight text-red-800">
+                                <span className="font-bold">Diabéticos:</span>{' '}
                                 <DraggableCell
+                                  as="span"
                                   date={day.date}
                                   field="supperDiabetic"
                                   value={day.supperDiabetic ?? 'Mingau de aveia...'}
@@ -1552,6 +1591,8 @@ export default function MenuEditorPage({ params }: { params: Params }) {
                                   onDragOver={(e) => handleDragOver(day.date, 'supperDiabetic', e)}
                                   onDragLeave={(e) => handleDragLeave(day.date, 'supperDiabetic', e)}
                                   onDrop={(e) => handleDrop(day.date, 'supperDiabetic', e)}
+                                  className="editable-cell hover:bg-purple-100 rounded px-0.5 inline-block cursor-pointer"
+                                  icon={<Pencil className="w-2 h-2 inline ml-1 opacity-40 no-print shrink-0" />}
                                   editComponent={
                                     <CreatableInlineDropdown
                                       options={getOptionsForField('supperDiabetic')}
