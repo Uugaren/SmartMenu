@@ -484,15 +484,15 @@ export function generateMonthlyMenu(
       nutritionistPlan = NUTRITIONIST_LARES_DAYS[planIndex] || NUTRITIONIST_VIDA_PLENA_DAYS[planIndex];
     }
 
-    // Almoço: prato principal
-    const mainDish = nutritionistPlan
-      ? { name: nutritionistPlan.lunchMain, id: null }
-      : (mainDishes.length > 0 ? mainDishes[dayIndex % mainDishes.length] : null);
+    // Almoço: prato principal (prioriza os pratos cadastrados no Supabase)
+    const mainDish = mainDishes.length > 0
+      ? mainDishes[dayIndex % mainDishes.length]
+      : (nutritionistPlan ? { name: nutritionistPlan.lunchMain, id: null } : null);
 
-    // Salada
-    const salad = nutritionistPlan
-      ? nutritionistPlan.lunchSalad
-      : (salads.length > 0 ? salads[dayIndex % salads.length]?.name : 'Salada do dia');
+    // Salada (prioriza as saladas cadastradas no Supabase)
+    const salad = salads.length > 0
+      ? salads[dayIndex % salads.length]?.name
+      : (nutritionistPlan ? nutritionistPlan.lunchSalad : 'Salada do dia');
 
     // Acompanhamento
     const lunchSide = nutritionistPlan ? nutritionistPlan.lunchSide : LUNCH_SIDE;

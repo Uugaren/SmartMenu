@@ -56,20 +56,20 @@ const DEFAULT_COLORS = ['#059669', '#0891B2', '#7c3aed', '#d97706', '#e11d48', '
 
 const DEFAULT_TENANTS: Tenant[] = [
   {
-    id: 'lares-id',
+    id: '67580ed8-76dd-4645-8b3d-2e9212ce27a0',
     name: 'Lares Casa de Repouso',
     slug: 'lares',
     logo_url: '/logos/lares.jpg',
     primary_color: '#059669',
-    created_at: '2026-01-01',
+    created_at: '2026-07-25',
   },
   {
-    id: 'vida-plena-id',
+    id: '918f7f15-29df-460a-a8ed-09aede7949a8',
     name: 'Casa de Repouso Vida Plena',
     slug: 'vida-plena',
     logo_url: '/logos/vida-plena.png',
     primary_color: '#0891B2',
-    created_at: '2026-01-01',
+    created_at: '2026-07-25',
   },
   {
     id: 'vovo-alda-id',

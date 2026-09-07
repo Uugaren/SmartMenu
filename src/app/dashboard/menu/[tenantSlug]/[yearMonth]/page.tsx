@@ -308,20 +308,20 @@ function DraggableCell({
 
 const DEFAULT_TENANTS_MAP: Record<string, Tenant> = {
   lares: {
-    id: 'lares-id',
+    id: '67580ed8-76dd-4645-8b3d-2e9212ce27a0',
     name: 'Lares Casa de Repouso',
     slug: 'lares',
     logo_url: '/logos/lares.jpg',
     primary_color: '#059669',
-    created_at: '2026-01-01',
+    created_at: '2026-07-25',
   },
   'vida-plena': {
-    id: 'vida-plena-id',
+    id: '918f7f15-29df-460a-a8ed-09aede7949a8',
     name: 'Casa de Repouso Vida Plena',
     slug: 'vida-plena',
     logo_url: '/logos/vida-plena.png',
     primary_color: '#0891B2',
-    created_at: '2026-01-01',
+    created_at: '2026-07-25',
   },
   'vovo-alda': {
     id: 'vovo-alda-id',
@@ -395,25 +395,34 @@ export default function MenuEditorPage({ params }: { params: Params }) {
           setTimeout(() => resolve({ timeout: true }), 4000)
         );
 
-        const fetchPromise = Promise.all([
-          supabase
+        const fetchPromise = (async () => {
+          // Resolve tenant first to get real database UUID
+          const { data: tenantData } = await supabase
             .from('tenants')
             .select('*')
             .eq('slug', tenantSlug)
-            .maybeSingle(),
-          supabase
-            .from('dishes')
-            .select('*')
-            .or(`tenant_id.eq.${initialTenant.id},tenant_id.is.null`)
-            .order('name'),
-          supabase
-            .from('monthly_menus')
-            .select('*, lunch_dish:dishes(*)')
-            .eq('tenant_id', initialTenant.id)
-            .gte('date', startDate)
-            .lte('date', endDate)
-            .order('date'),
-        ]);
+            .maybeSingle();
+
+          const resolvedTenant = tenantData || initialTenant;
+          const tenantId = resolvedTenant.id;
+
+          const [{ data: dishesData }, { data: existingMenus }] = await Promise.all([
+            supabase
+              .from('dishes')
+              .select('*')
+              .or(`tenant_id.eq.${tenantId},tenant_id.is.null`)
+              .order('name'),
+            supabase
+              .from('monthly_menus')
+              .select('*, lunch_dish:dishes(*)')
+              .eq('tenant_id', tenantId)
+              .gte('date', startDate)
+              .lte('date', endDate)
+              .order('date'),
+          ]);
+
+          return { tenantData: resolvedTenant, dishesData, existingMenus };
+        })();
 
         const raceResult = await Promise.race([fetchPromise, timeoutPromise]);
 
@@ -422,7 +431,7 @@ export default function MenuEditorPage({ params }: { params: Params }) {
           return;
         }
 
-        const [{ data: tenantData }, { data: dishesData }, { data: existingMenus }] = raceResult;
+        const { tenantData, dishesData, existingMenus } = raceResult;
 
         if (isCancelled) return;
 
@@ -430,41 +439,46 @@ export default function MenuEditorPage({ params }: { params: Params }) {
           setTenant(tenantData);
         }
 
+        const currentDishes = dishesData && dishesData.length > 0 ? dishesData : dishes;
         if (dishesData && dishesData.length > 0) {
           setDishes(dishesData);
         }
 
+        // Generate menu using dishes loaded from Supabase
+        const generated = generateMonthlyMenu(tenantData || initialTenant, currentDishes, year, month);
+
         if (existingMenus && existingMenus.length > 0) {
-          setDays((currentDays) => {
-            return currentDays.map((day) => {
-              const existing = existingMenus.find((m: MonthlyMenu) => m.date === day.date);
-              if (existing) {
-                const mealData = (existing.meal_data || {}) as Partial<DailyMeal>;
-                return {
-                  ...day,
-                  lunchMain: existing.lunch_dish?.name ?? mealData.lunchMain ?? day.lunchMain,
-                  lunchMainDishId: existing.lunch_dish_id ?? mealData.lunchMainDishId ?? day.lunchMainDishId,
-                  lunchSalad: existing.lunch_salad ?? mealData.lunchSalad ?? day.lunchSalad,
-                  juice: existing.juice ?? mealData.juice ?? day.juice,
-                  dessert: existing.dessert_override ?? mealData.dessert ?? day.dessert,
-                  breakfast: mealData.breakfast ?? day.breakfast,
-                  breakfastDiabetic: mealData.breakfastDiabetic ?? day.breakfastDiabetic,
-                  breakfastPastoso: mealData.breakfastPastoso ?? day.breakfastPastoso,
-                  colacao: mealData.colacao ?? day.colacao,
-                  lunchSide: mealData.lunchSide ?? day.lunchSide,
-                  lunchDiabetic: mealData.lunchDiabetic ?? day.lunchDiabetic,
-                  lunchPastoso: mealData.lunchPastoso ?? day.lunchPastoso,
-                  afternoonSnack: mealData.afternoonSnack ?? day.afternoonSnack,
-                  afternoonSnackDiabetic: mealData.afternoonSnackDiabetic ?? day.afternoonSnackDiabetic,
-                  dinner: mealData.dinner ?? day.dinner,
-                  dinnerDiabetic: mealData.dinnerDiabetic ?? day.dinnerDiabetic,
-                  supper: mealData.supper ?? day.supper,
-                  supperDiabetic: mealData.supperDiabetic ?? day.supperDiabetic,
-                };
-              }
-              return day;
-            });
+          const merged = generated.map((day) => {
+            const existing = existingMenus.find((m: MonthlyMenu) => m.date === day.date);
+            if (existing) {
+              const mealData = (existing.meal_data || {}) as Partial<DailyMeal>;
+              return {
+                ...day,
+                lunchMain: existing.lunch_dish?.name ?? mealData.lunchMain ?? day.lunchMain,
+                lunchMainDishId: existing.lunch_dish_id ?? mealData.lunchMainDishId ?? day.lunchMainDishId,
+                lunchSalad: existing.lunch_salad ?? mealData.lunchSalad ?? day.lunchSalad,
+                juice: existing.juice ?? mealData.juice ?? day.juice,
+                dessert: existing.dessert_override ?? mealData.dessert ?? day.dessert,
+                breakfast: mealData.breakfast ?? day.breakfast,
+                breakfastDiabetic: mealData.breakfastDiabetic ?? day.breakfastDiabetic,
+                breakfastPastoso: mealData.breakfastPastoso ?? day.breakfastPastoso,
+                colacao: mealData.colacao ?? day.colacao,
+                lunchSide: mealData.lunchSide ?? day.lunchSide,
+                lunchDiabetic: mealData.lunchDiabetic ?? day.lunchDiabetic,
+                lunchPastoso: mealData.lunchPastoso ?? day.lunchPastoso,
+                afternoonSnack: mealData.afternoonSnack ?? day.afternoonSnack,
+                afternoonSnackDiabetic: mealData.afternoonSnackDiabetic ?? day.afternoonSnackDiabetic,
+                dinner: mealData.dinner ?? day.dinner,
+                dinnerDiabetic: mealData.dinnerDiabetic ?? day.dinnerDiabetic,
+                supper: mealData.supper ?? day.supper,
+                supperDiabetic: mealData.supperDiabetic ?? day.supperDiabetic,
+              };
+            }
+            return day;
           });
+          setDays(merged);
+        } else if (currentDishes.length > 0) {
+          setDays(generated);
         }
       } catch (err) {
         console.warn('Sincronização em segundo plano:', err);
