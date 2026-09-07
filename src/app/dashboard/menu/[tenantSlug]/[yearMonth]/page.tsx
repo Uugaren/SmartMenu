@@ -39,6 +39,33 @@ const MONTHS = [
   'JULHO', 'AGOSTO', 'SETEMBRO', 'OUTUBRO', 'NOVEMBRO', 'DEZEMBRO',
 ];
 
+export type MealType = 'breakfast' | 'lunch' | 'afternoonSnack' | 'dinner' | 'supper';
+
+export const MEAL_FIELDS_MAP: Record<MealType, (keyof DailyMeal)[]> = {
+  breakfast: ['breakfast', 'colacao', 'breakfastDiabetic', 'breakfastPastoso'],
+  lunch: [
+    'lunchMain',
+    'lunchMainDishId',
+    'lunchSide',
+    'lunchSalad',
+    'juice',
+    'dessert',
+    'lunchDiabetic',
+    'lunchPastoso',
+  ],
+  afternoonSnack: ['afternoonSnack', 'afternoonSnackDiabetic'],
+  dinner: ['dinner', 'dinnerDiabetic'],
+  supper: ['supper', 'supperDiabetic'],
+};
+
+export const MEAL_TYPE_LABELS: Record<MealType, string> = {
+  breakfast: 'Café da Manhã + Colação',
+  lunch: 'Almoço Completo',
+  afternoonSnack: 'Lanche da Tarde',
+  dinner: 'Jantar Completo',
+  supper: 'Ceia Completa',
+};
+
 type Params = Promise<{ tenantSlug: string; yearMonth: string }>;
 
 function getTenantLogo(tenant: Tenant | null): string {
@@ -279,6 +306,33 @@ function DraggableCell({
   );
 }
 
+const DEFAULT_TENANTS_MAP: Record<string, Tenant> = {
+  lares: {
+    id: 'lares-id',
+    name: 'Lares Casa de Repouso',
+    slug: 'lares',
+    logo_url: '/logos/lares.jpg',
+    primary_color: '#059669',
+    created_at: '2026-01-01',
+  },
+  'vida-plena': {
+    id: 'vida-plena-id',
+    name: 'Casa de Repouso Vida Plena',
+    slug: 'vida-plena',
+    logo_url: '/logos/vida-plena.png',
+    primary_color: '#0891B2',
+    created_at: '2026-01-01',
+  },
+  'vovo-alda': {
+    id: 'vovo-alda-id',
+    name: 'Casa de Repouso Vovó Alda',
+    slug: 'vovo-alda',
+    logo_url: '/logos/vovo-alda.png',
+    primary_color: '#0284c7',
+    created_at: '2026-01-01',
+  },
+};
+
 // ============================================================================
 // Main page component
 // ============================================================================
@@ -287,10 +341,26 @@ export default function MenuEditorPage({ params }: { params: Params }) {
   const { tenantSlug, yearMonth } = resolvedParams;
   const router = useRouter();
 
-  const [tenant, setTenant] = useState<Tenant | null>(null);
+  const [year, month] = yearMonth.split('-').map(Number);
+  const monthLabel = `${MONTHS[month - 1]} ${year}`;
+
+  const initialTenant: Tenant = DEFAULT_TENANTS_MAP[tenantSlug] || {
+    id: `tenant-${tenantSlug}`,
+    name: tenantSlug.replace(/-/g, ' ').toUpperCase(),
+    slug: tenantSlug,
+    logo_url: '/logos/lares.jpg',
+    primary_color: '#059669',
+    created_at: '2026-01-01',
+  };
+
+  const [tenant, setTenant] = useState<Tenant>(initialTenant);
   const [dishes, setDishes] = useState<Dish[]>([]);
-  const [days, setDays] = useState<DailyMeal[]>([]);
-  const [loading, setLoading] = useState(true);
+  // Instant optimistic render: generates entire 31-day nutritionist menu in <0.05s
+  const [days, setDays] = useState<DailyMeal[]>(() =>
+    generateMonthlyMenu(initialTenant, [], year, month)
+  );
+  const [loading, setLoading] = useState(false);
+  const [isSyncing, setIsSyncing] = useState(true);
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
 
@@ -301,144 +371,117 @@ export default function MenuEditorPage({ params }: { params: Params }) {
   const [dragItem, setDragItem] = useState<
     | { type: 'CELL'; date: string; field: keyof DailyMeal; value: string }
     | { type: 'DAY'; date: string; label: string }
+    | { type: 'MEAL'; date: string; mealType: MealType; label: string }
     | null
   >(null);
   const [dropTarget, setDropTarget] = useState<
     | { type: 'CELL'; date: string; field: keyof DailyMeal }
     | { type: 'DAY'; date: string }
+    | { type: 'MEAL'; date: string; mealType: MealType }
     | null
   >(null);
   const [swapToast, setSwapToast] = useState<{ title: string; message: string } | null>(null);
 
-  const [year, month] = yearMonth.split('-').map(Number);
-  const monthLabel = `${MONTHS[month - 1]} ${year}`;
-
-  const DEFAULT_TENANTS_MAP: Record<string, Tenant> = {
-    lares: {
-      id: 'lares-id',
-      name: 'Lares Casa de Repouso',
-      slug: 'lares',
-      logo_url: '/logos/lares.jpg',
-      primary_color: '#059669',
-      created_at: '2026-01-01',
-    },
-    'vida-plena': {
-      id: 'vida-plena-id',
-      name: 'Casa de Repouso Vida Plena',
-      slug: 'vida-plena',
-      logo_url: '/logos/vida-plena.png',
-      primary_color: '#0891B2',
-      created_at: '2026-01-01',
-    },
-    'vovo-alda': {
-      id: 'vovo-alda-id',
-      name: 'Casa de Repouso Vovó Alda',
-      slug: 'vovo-alda',
-      logo_url: '/logos/vovo-alda.png',
-      primary_color: '#0284c7',
-      created_at: '2026-01-01',
-    },
-  };
-
-  // Load tenant + dishes + existing menus
+  // Parallel background sync with timeout safeguard (never blocks UI)
   useEffect(() => {
-    async function loadData() {
+    let isCancelled = false;
+
+    async function syncData() {
       try {
-        const { data: tenantData } = await supabase
-          .from('tenants')
-          .select('*')
-          .eq('slug', tenantSlug)
-          .maybeSingle();
-
-        let resolvedTenant: Tenant | null = tenantData ?? null;
-
-        if (!resolvedTenant && DEFAULT_TENANTS_MAP[tenantSlug]) {
-          resolvedTenant = DEFAULT_TENANTS_MAP[tenantSlug];
-          supabase
-            .from('tenants')
-            .insert({
-              name: resolvedTenant.name,
-              slug: resolvedTenant.slug,
-              primary_color: resolvedTenant.primary_color,
-              logo_url: resolvedTenant.logo_url,
-            })
-            .then(() => {});
-        }
-
-        if (!resolvedTenant) {
-          resolvedTenant = {
-            id: `tenant-${tenantSlug}`,
-            name: tenantSlug.replace(/-/g, ' ').toUpperCase(),
-            slug: tenantSlug,
-            logo_url: '/logos/lares.jpg',
-            primary_color: '#059669',
-            created_at: new Date().toISOString(),
-          };
-        }
-
-        setTenant(resolvedTenant);
-
-        // Fetch tenant + global dishes
-        const { data: dishesData } = await supabase
-          .from('dishes')
-          .select('*')
-          .or(`tenant_id.eq.${resolvedTenant.id},tenant_id.is.null`)
-          .order('name');
-        setDishes(dishesData ?? []);
-
         const startDate = `${yearMonth}-01`;
         const endDate = `${yearMonth}-31`;
-        const { data: existingMenus } = await supabase
-          .from('monthly_menus')
-          .select('*, lunch_dish:dishes(*)')
-          .eq('tenant_id', resolvedTenant.id)
-          .gte('date', startDate)
-          .lte('date', endDate)
-          .order('date');
 
-        const generated = generateMonthlyMenu(resolvedTenant, dishesData ?? [], year, month);
+        const timeoutPromise = new Promise<{ timeout: true }>((resolve) =>
+          setTimeout(() => resolve({ timeout: true }), 4000)
+        );
+
+        const fetchPromise = Promise.all([
+          supabase
+            .from('tenants')
+            .select('*')
+            .eq('slug', tenantSlug)
+            .maybeSingle(),
+          supabase
+            .from('dishes')
+            .select('*')
+            .or(`tenant_id.eq.${initialTenant.id},tenant_id.is.null`)
+            .order('name'),
+          supabase
+            .from('monthly_menus')
+            .select('*, lunch_dish:dishes(*)')
+            .eq('tenant_id', initialTenant.id)
+            .gte('date', startDate)
+            .lte('date', endDate)
+            .order('date'),
+        ]);
+
+        const raceResult = await Promise.race([fetchPromise, timeoutPromise]);
+
+        if ('timeout' in raceResult) {
+          if (!isCancelled) setIsSyncing(false);
+          return;
+        }
+
+        const [{ data: tenantData }, { data: dishesData }, { data: existingMenus }] = raceResult;
+
+        if (isCancelled) return;
+
+        if (tenantData) {
+          setTenant(tenantData);
+        }
+
+        if (dishesData && dishesData.length > 0) {
+          setDishes(dishesData);
+        }
 
         if (existingMenus && existingMenus.length > 0) {
-          const merged = generated.map((day) => {
-            const existing = existingMenus.find((m: MonthlyMenu) => m.date === day.date);
-            if (existing) {
-              const mealData = (existing.meal_data || {}) as Partial<DailyMeal>;
-              return {
-                ...day,
-                lunchMain: existing.lunch_dish?.name ?? mealData.lunchMain ?? day.lunchMain,
-                lunchMainDishId: existing.lunch_dish_id ?? mealData.lunchMainDishId ?? day.lunchMainDishId,
-                lunchSalad: existing.lunch_salad ?? mealData.lunchSalad ?? day.lunchSalad,
-                juice: existing.juice ?? mealData.juice ?? day.juice,
-                dessert: existing.dessert_override ?? mealData.dessert ?? day.dessert,
-                breakfast: mealData.breakfast ?? day.breakfast,
-                breakfastDiabetic: mealData.breakfastDiabetic ?? day.breakfastDiabetic,
-                breakfastPastoso: mealData.breakfastPastoso ?? day.breakfastPastoso,
-                colacao: mealData.colacao ?? day.colacao,
-                lunchSide: mealData.lunchSide ?? day.lunchSide,
-                lunchDiabetic: mealData.lunchDiabetic ?? day.lunchDiabetic,
-                lunchPastoso: mealData.lunchPastoso ?? day.lunchPastoso,
-                afternoonSnack: mealData.afternoonSnack ?? day.afternoonSnack,
-                afternoonSnackDiabetic: mealData.afternoonSnackDiabetic ?? day.afternoonSnackDiabetic,
-                dinner: mealData.dinner ?? day.dinner,
-                dinnerDiabetic: mealData.dinnerDiabetic ?? day.dinnerDiabetic,
-                supper: mealData.supper ?? day.supper,
-                supperDiabetic: mealData.supperDiabetic ?? day.supperDiabetic,
-              };
-            }
-            return day;
+          setDays((currentDays) => {
+            return currentDays.map((day) => {
+              const existing = existingMenus.find((m: MonthlyMenu) => m.date === day.date);
+              if (existing) {
+                const mealData = (existing.meal_data || {}) as Partial<DailyMeal>;
+                return {
+                  ...day,
+                  lunchMain: existing.lunch_dish?.name ?? mealData.lunchMain ?? day.lunchMain,
+                  lunchMainDishId: existing.lunch_dish_id ?? mealData.lunchMainDishId ?? day.lunchMainDishId,
+                  lunchSalad: existing.lunch_salad ?? mealData.lunchSalad ?? day.lunchSalad,
+                  juice: existing.juice ?? mealData.juice ?? day.juice,
+                  dessert: existing.dessert_override ?? mealData.dessert ?? day.dessert,
+                  breakfast: mealData.breakfast ?? day.breakfast,
+                  breakfastDiabetic: mealData.breakfastDiabetic ?? day.breakfastDiabetic,
+                  breakfastPastoso: mealData.breakfastPastoso ?? day.breakfastPastoso,
+                  colacao: mealData.colacao ?? day.colacao,
+                  lunchSide: mealData.lunchSide ?? day.lunchSide,
+                  lunchDiabetic: mealData.lunchDiabetic ?? day.lunchDiabetic,
+                  lunchPastoso: mealData.lunchPastoso ?? day.lunchPastoso,
+                  afternoonSnack: mealData.afternoonSnack ?? day.afternoonSnack,
+                  afternoonSnackDiabetic: mealData.afternoonSnackDiabetic ?? day.afternoonSnackDiabetic,
+                  dinner: mealData.dinner ?? day.dinner,
+                  dinnerDiabetic: mealData.dinnerDiabetic ?? day.dinnerDiabetic,
+                  supper: mealData.supper ?? day.supper,
+                  supperDiabetic: mealData.supperDiabetic ?? day.supperDiabetic,
+                };
+              }
+              return day;
+            });
           });
-          setDays(merged);
-        } else {
-          setDays(generated);
         }
       } catch (err) {
-        console.error('Erro ao carregar dados do cardápio:', err);
+        console.warn('Sincronização em segundo plano:', err);
       } finally {
-        setLoading(false);
+        if (!isCancelled) {
+          setIsSyncing(false);
+          setLoading(false);
+        }
       }
     }
-    loadData();
-  }, [tenantSlug, yearMonth, year, month, router]);
+
+    syncData();
+
+    return () => {
+      isCancelled = true;
+    };
+  }, [tenantSlug, yearMonth, initialTenant.id]);
 
   // Generic updater for any field of a daily meal
   const updateDailyMealField = useCallback(
@@ -547,6 +590,27 @@ export default function MenuEditorPage({ params }: { params: Params }) {
     [dropTarget]
   );
 
+  // Helper check for whole-meal drag highlight
+  const isMealDragging = useCallback(
+    (date: string, mealType: MealType) => {
+      if (!dragItem) return false;
+      if (dragItem.type === 'DAY') return dragItem.date === date;
+      if (dragItem.type === 'MEAL') return dragItem.date === date && dragItem.mealType === mealType;
+      return false;
+    },
+    [dragItem]
+  );
+
+  const isMealDropTarget = useCallback(
+    (date: string, mealType: MealType) => {
+      if (!dropTarget) return false;
+      if (dropTarget.type === 'DAY') return dropTarget.date === date;
+      if (dropTarget.type === 'MEAL') return dropTarget.date === date && dropTarget.mealType === mealType;
+      return false;
+    },
+    [dropTarget]
+  );
+
   // Swap all meal preparations of two full days
   const swapFullDays = useCallback(
     (sourceDate: string, targetDate: string) => {
@@ -610,6 +674,51 @@ export default function MenuEditorPage({ params }: { params: Params }) {
     [days]
   );
 
+  // Swap a specific meal type (e.g. Almoço, Jantar, Café, Lanche, Ceia) between two days
+  const swapMeal = useCallback(
+    (sourceDate: string, targetDate: string, mealType: MealType) => {
+      if (sourceDate === targetDate) return;
+
+      const sourceDay = days.find((d) => d.date === sourceDate);
+      const targetDay = days.find((d) => d.date === targetDate);
+
+      if (!sourceDay || !targetDay) return;
+
+      const fieldsToSwap = MEAL_FIELDS_MAP[mealType];
+
+      setDays((prevDays) =>
+        prevDays.map((day) => {
+          if (day.date === sourceDate) {
+            const updated = { ...day };
+            for (const field of fieldsToSwap) {
+              (updated as any)[field] = targetDay[field];
+            }
+            return updated;
+          }
+          if (day.date === targetDate) {
+            const updated = { ...day };
+            for (const field of fieldsToSwap) {
+              (updated as any)[field] = sourceDay[field];
+            }
+            return updated;
+          }
+          return day;
+        })
+      );
+
+      const sourceDayLabel = getFormattedDayName(sourceDate);
+      const targetDayLabel = getFormattedDayName(targetDate);
+      const mealLabel = MEAL_TYPE_LABELS[mealType] || 'Refeição';
+
+      setSwapToast({
+        title: `${mealLabel} trocado! 🔄`,
+        message: `${mealLabel} de [${sourceDayLabel}] ↔ [${targetDayLabel}] foram trocados com sucesso.`,
+      });
+      setTimeout(() => setSwapToast(null), 4000);
+    },
+    [days]
+  );
+
   // Drag and Drop event handlers (Cell)
   const handleDragStart = useCallback(
     (date: string, field: keyof DailyMeal, value: string, e: React.DragEvent) => {
@@ -655,6 +764,89 @@ export default function MenuEditorPage({ params }: { params: Params }) {
       });
     },
     []
+  );
+
+  // Drag and Drop event handlers (Meal Type)
+  const handleDragMealStart = useCallback(
+    (date: string, mealType: MealType, e: React.DragEvent) => {
+      e.stopPropagation();
+      const payload = {
+        type: 'MEAL' as const,
+        date,
+        mealType,
+        label: MEAL_TYPE_LABELS[mealType],
+      };
+      setDragItem(payload);
+      try {
+        e.dataTransfer.setData('text/plain', JSON.stringify(payload));
+        e.dataTransfer.effectAllowed = 'move';
+      } catch {
+        // ignore
+      }
+    },
+    []
+  );
+
+  const handleDragMealOver = useCallback(
+    (date: string, mealType: MealType, e: React.DragEvent) => {
+      e.preventDefault();
+      try {
+        e.dataTransfer.dropEffect = 'move';
+      } catch {
+        // ignore
+      }
+      setDropTarget((prev) => {
+        if (prev?.type === 'MEAL' && prev.date === date && prev.mealType === mealType) return prev;
+        return { type: 'MEAL', date, mealType };
+      });
+    },
+    []
+  );
+
+  const handleDragMealLeave = useCallback(
+    (date: string, mealType: MealType, e: React.DragEvent) => {
+      e.preventDefault();
+      setDropTarget((prev) => {
+        if (prev?.type === 'MEAL' && prev.date === date && prev.mealType === mealType) return null;
+        return prev;
+      });
+    },
+    []
+  );
+
+  const handleDropMeal = useCallback(
+    (targetDate: string, targetMealType: MealType, e: React.DragEvent) => {
+      e.preventDefault();
+      e.stopPropagation();
+
+      let source = dragItem;
+      if (!source) {
+        try {
+          const dataStr = e.dataTransfer.getData('text/plain');
+          if (dataStr) {
+            source = JSON.parse(dataStr);
+          }
+        } catch {
+          // ignore
+        }
+      }
+
+      if (source) {
+        const sourceType = (source as any).type;
+        if (sourceType === 'MEAL') {
+          const mealSource = source as { date: string; mealType: MealType };
+          if (mealSource.date !== targetDate) {
+            swapMeal(mealSource.date, targetDate, mealSource.mealType);
+          }
+        } else if (sourceType === 'DAY') {
+          swapFullDays(source.date, targetDate);
+        }
+      }
+
+      setDragItem(null);
+      setDropTarget(null);
+    },
+    [dragItem, swapMeal, swapFullDays]
   );
 
   // Drag and Drop event handlers (Day Header)
@@ -717,13 +909,21 @@ export default function MenuEditorPage({ params }: { params: Params }) {
       }
 
       if (source) {
-        swapFullDays(source.date, targetDate);
+        const sourceType = (source as any).type;
+        if (sourceType === 'MEAL') {
+          const mealSource = source as { date: string; mealType: MealType };
+          if (mealSource.date !== targetDate) {
+            swapMeal(mealSource.date, targetDate, mealSource.mealType);
+          }
+        } else {
+          swapFullDays(source.date, targetDate);
+        }
       }
 
       setDragItem(null);
       setDropTarget(null);
     },
-    [dragItem, swapFullDays]
+    [dragItem, swapFullDays, swapMeal]
   );
 
   const handleDrop = useCallback(
@@ -748,6 +948,12 @@ export default function MenuEditorPage({ params }: { params: Params }) {
         if (sourceType === 'DAY') {
           // Entire day was dragged onto a cell of targetDate -> swap full days
           swapFullDays(source.date, targetDate);
+        } else if (sourceType === 'MEAL') {
+          // Entire meal was dragged onto a cell -> swap that meal
+          const mealSource = source as { date: string; mealType: MealType };
+          if (mealSource.date !== targetDate) {
+            swapMeal(mealSource.date, targetDate, mealSource.mealType);
+          }
         } else {
           const cellSource = source as { date: string; field: keyof DailyMeal; value: string };
           if (cellSource.date !== targetDate || cellSource.field !== targetField) {
@@ -810,7 +1016,7 @@ export default function MenuEditorPage({ params }: { params: Params }) {
       setDragItem(null);
       setDropTarget(null);
     },
-    [dragItem, days, swapFullDays]
+    [dragItem, days, swapFullDays, swapMeal]
   );
 
   // Save to Supabase
@@ -1038,6 +1244,8 @@ export default function MenuEditorPage({ params }: { params: Params }) {
           <span>
             {dragItem.type === 'DAY'
               ? `Solte sobre outro dia para trocar TODAS as preparações de [${getFormattedDayName(dragItem.date)}]`
+              : dragItem.type === 'MEAL'
+              ? `Solte sobre outro dia para trocar [${dragItem.label}] de [${getFormattedDayName(dragItem.date)}]`
               : `Solte sobre outro prato/dia para trocar de lugar com "${dragItem.value}"`}
           </span>
         </div>
@@ -1061,8 +1269,14 @@ export default function MenuEditorPage({ params }: { params: Params }) {
                 className="h-9 w-auto object-contain rounded border border-slate-200"
               />
               <div>
-                <h1 className="font-display text-sm font-bold text-on-surface leading-tight">
-                  {tenant.name}
+                <h1 className="font-display text-sm font-bold text-on-surface leading-tight flex items-center gap-2">
+                  <span>{tenant.name}</span>
+                  {isSyncing && (
+                    <span className="text-[10px] font-normal text-slate-400 flex items-center gap-1">
+                      <Loader2 className="w-2.5 h-2.5 animate-spin text-emerald-600" />
+                      Sincronizando...
+                    </span>
+                  )}
                 </h1>
                 <p className="text-xs text-on-surface-muted">{monthLabel}</p>
               </div>
@@ -1109,7 +1323,7 @@ export default function MenuEditorPage({ params }: { params: Params }) {
           <div className="flex items-center gap-2">
             <Sparkles className="w-4 h-4 text-emerald-600 shrink-0" />
             <span>
-              <strong>Drag & Drop Completo:</strong> Arraste o <u>cabeçalho do dia</u> para trocar <strong>TODAS AS PREPARAÇÕES DO DIA</strong> com outro dia. Para mover um prato individual, arraste a célula desejada.
+              <strong>Drag & Drop Avançado:</strong> Arraste o <u>cabeçalho do dia</u> para trocar todas as refeições do dia. Arraste as alças de <u>refeição completa</u> (ex: <em>Mover Almoço Completo</em>, <em>Mover Café + Colação</em>, etc.) para trocar a refeição inteira entre dias. Arraste qualquer texto para trocar itens individuais.
             </span>
           </div>
         </div>
@@ -1122,7 +1336,7 @@ export default function MenuEditorPage({ params }: { params: Params }) {
             {/* ========================================================================= */}
             {/* PAGE 1 OF WEEK: CAFÉ E ALMOÇO                                            */}
             {/* ========================================================================= */}
-            <div className="bg-white rounded-xl border border-slate-300 shadow-md p-4 overflow-hidden print-page-block">
+            <div className="bg-white rounded-xl border border-slate-300 shadow-md p-4 overflow-hidden print-page-block print:overflow-visible print:border-none print:shadow-none print:p-0 print:m-0">
               {/* Header Banner with Logos */}
               <div className="flex items-center justify-between border-b-2 border-slate-300 pb-3 mb-3">
                 <div className="w-36 flex justify-start">
@@ -1142,17 +1356,17 @@ export default function MenuEditorPage({ params }: { params: Params }) {
               </div>
 
               {/* Table: Café e Almoço */}
-              <div className="overflow-x-auto">
+              <div className="overflow-x-auto print:overflow-visible">
                 <table className="menu-grid-table border-collapse w-full text-[11px] text-black">
                   <thead>
                     <tr className="bg-slate-200 text-black">
-                      <th className="border border-slate-400 p-2 text-center font-bold text-xs uppercase w-32">
+                      <th className="border border-slate-400 p-2 text-center font-bold text-xs uppercase w-32 print:static print:border-[1.5px] print:border-black print:bg-slate-200">
                         REFEIÇÕES
                       </th>
                       {week.map((day, dayIdx) => {
                         if (!day) {
                           return (
-                            <th key={dayIdx} className="border border-slate-400 p-2 text-center font-bold text-xs uppercase bg-slate-100">
+                            <th key={dayIdx} className="border border-slate-400 p-2 text-center font-bold text-xs uppercase bg-slate-100 print:static print:border-[1.5px] print:border-black print:bg-slate-100">
                               {DAY_NAMES_SHORT[dayIdx]}
                             </th>
                           );
@@ -1171,7 +1385,7 @@ export default function MenuEditorPage({ params }: { params: Params }) {
                             onDragOver={(e) => handleDragDayOver(day.date, e)}
                             onDragLeave={(e) => handleDragDayLeave(day.date, e)}
                             onDrop={(e) => handleDropDay(day.date, e)}
-                            className={`border border-slate-400 p-1.5 text-center font-bold text-xs uppercase cursor-grab active:cursor-grabbing transition-all select-none group relative ${
+                            className={`border border-slate-400 p-1.5 text-center font-bold text-xs uppercase cursor-grab active:cursor-grabbing transition-all select-none group relative print:static print:border-[1.5px] print:border-black print:bg-slate-200 ${
                               isDayDragging
                                 ? 'bg-amber-200 opacity-40 ring-2 ring-dashed ring-amber-600 scale-95'
                                 : isDayDropTarget
@@ -1196,15 +1410,42 @@ export default function MenuEditorPage({ params }: { params: Params }) {
                   <tbody>
                     {/* Row 1: CAFÉ DA MANHÃ + COLAÇÃO */}
                     <tr>
-                      <td className="border border-slate-400 p-2 font-bold text-center align-middle bg-[#fef3c7] text-slate-900 w-32">
+                      <td className="border border-slate-400 p-2 font-bold text-center align-middle bg-[#fef3c7] text-slate-900 w-32 print:static print:border-[1.5px] print:border-black">
                         CAFÉ DA MANHÃ
                         <br />+<br />
                         COLAÇÃO
                       </td>
                       {week.map((day, dayIdx) => (
-                        <td key={dayIdx} className="border border-slate-400 p-2 align-top bg-white">
+                        <td
+                          key={dayIdx}
+                          onDragOver={(e) => day && handleDragMealOver(day.date, 'breakfast', e)}
+                          onDragLeave={(e) => day && handleDragMealLeave(day.date, 'breakfast', e)}
+                          onDrop={(e) => day && handleDropMeal(day.date, 'breakfast', e)}
+                          className={`border border-slate-400 p-2 align-top bg-white transition-all relative print:static print:border-[1.5px] print:border-black ${
+                            day && isMealDragging(day.date, 'breakfast')
+                              ? 'opacity-40 bg-amber-50 ring-2 ring-dashed ring-amber-500'
+                              : day && isMealDropTarget(day.date, 'breakfast')
+                              ? 'bg-amber-100 ring-2 ring-amber-500 scale-[1.01] shadow-lg font-bold'
+                              : ''
+                          }`}
+                        >
                           {day && (
                             <div className="space-y-2">
+                              {/* Draggable handle for whole Breakfast */}
+                              <div
+                                draggable
+                                onDragStart={(e) => handleDragMealStart(day.date, 'breakfast', e)}
+                                onDragEnd={handleDragEnd}
+                                className="flex items-center justify-between px-1.5 py-0.5 mb-1 rounded bg-amber-100/80 hover:bg-amber-200 text-amber-950 font-semibold cursor-grab active:cursor-grabbing text-[9px] transition-all no-print select-none border border-amber-300/70 shadow-xs group"
+                                title="Arraste para trocar todo o Café da Manhã + Colação deste dia com outro dia"
+                              >
+                                <span className="flex items-center gap-1">
+                                  <GripVertical className="w-3 h-3 text-amber-700 shrink-0" />
+                                  <span>Mover Café + Colação</span>
+                                </span>
+                                <ArrowLeftRight className="w-2.5 h-2.5 text-amber-700 opacity-60 group-hover:opacity-100" />
+                              </div>
+
                               {/* Main Breakfast & Fruit Dropdown */}
                               <div className="text-[11px] leading-tight">
                                 <DraggableCell
@@ -1339,16 +1580,43 @@ export default function MenuEditorPage({ params }: { params: Params }) {
 
                     {/* Row 2: ALMOÇO */}
                     <tr>
-                      <td className="border border-slate-400 p-2 font-bold text-center align-middle bg-[#d1fae5] text-emerald-950 w-32">
+                      <td className="border border-slate-400 p-2 font-bold text-center align-middle bg-[#d1fae5] text-emerald-950 w-32 print:static print:border-[1.5px] print:border-black">
                         ALMOÇO
                       </td>
                       {week.map((day, dayIdx) => (
-                        <td key={dayIdx} className="border border-slate-400 p-2 align-top bg-white">
+                        <td
+                          key={dayIdx}
+                          onDragOver={(e) => day && handleDragMealOver(day.date, 'lunch', e)}
+                          onDragLeave={(e) => day && handleDragMealLeave(day.date, 'lunch', e)}
+                          onDrop={(e) => day && handleDropMeal(day.date, 'lunch', e)}
+                          className={`border border-slate-400 p-2 align-top bg-white transition-all relative print:static print:border-[1.5px] print:border-black ${
+                            day && isMealDragging(day.date, 'lunch')
+                              ? 'opacity-40 bg-emerald-50 ring-2 ring-dashed ring-emerald-500'
+                              : day && isMealDropTarget(day.date, 'lunch')
+                              ? 'bg-amber-100 ring-2 ring-amber-500 scale-[1.01] shadow-lg font-bold'
+                              : ''
+                          }`}
+                        >
                           {day && (
                             <div className="space-y-2">
+                              {/* Draggable handle for whole Lunch */}
+                              <div
+                                draggable
+                                onDragStart={(e) => handleDragMealStart(day.date, 'lunch', e)}
+                                onDragEnd={handleDragEnd}
+                                className="flex items-center justify-between px-1.5 py-0.5 mb-1 rounded bg-emerald-100/80 hover:bg-emerald-200 text-emerald-950 font-semibold cursor-grab active:cursor-grabbing text-[9px] transition-all no-print select-none border border-emerald-300/70 shadow-xs group"
+                                title="Arraste para trocar todo o Almoço deste dia com outro dia"
+                              >
+                                <span className="flex items-center gap-1">
+                                  <GripVertical className="w-3 h-3 text-emerald-700 shrink-0" />
+                                  <span>Mover Almoço Completo</span>
+                                </span>
+                                <ArrowLeftRight className="w-2.5 h-2.5 text-emerald-700 opacity-60 group-hover:opacity-100" />
+                              </div>
+
                               <div className="text-[11px] leading-tight space-y-1">
                                 {/* Editable Lunch Side */}
-                                <div className="editable-cell p-0.5 rounded -mx-0.5">
+                                <div className="editable-cell p-0.5 rounded -mx-0.5 print:m-0">
                                   <DraggableCell
                                     as="span"
                                     date={day.date}
@@ -1379,7 +1647,7 @@ export default function MenuEditorPage({ params }: { params: Params }) {
                                 </div>
 
                                 {/* Editable Protein (Main Dish e.g. Filé Empanado / Bife a Cavalo) */}
-                                <div className="editable-cell p-0.5 rounded -mx-0.5">
+                                <div className="editable-cell p-0.5 rounded -mx-0.5 print:m-0">
                                   <DraggableCell
                                     as="span"
                                     date={day.date}
@@ -1410,7 +1678,7 @@ export default function MenuEditorPage({ params }: { params: Params }) {
                                 </div>
 
                                 {/* Editable Salad */}
-                                <div className="editable-cell p-0.5 rounded -mx-0.5">
+                                <div className="editable-cell p-0.5 rounded -mx-0.5 print:m-0">
                                   <DraggableCell
                                     as="span"
                                     date={day.date}
@@ -1442,7 +1710,7 @@ export default function MenuEditorPage({ params }: { params: Params }) {
                                 </div>
 
                                 {/* Editable Juice */}
-                                <div className="editable-cell p-0.5 rounded -mx-0.5">
+                                <div className="editable-cell p-0.5 rounded -mx-0.5 print:m-0">
                                   <DraggableCell
                                     as="span"
                                     date={day.date}
@@ -1548,7 +1816,7 @@ export default function MenuEditorPage({ params }: { params: Params }) {
             {/* ========================================================================= */}
             {/* PAGE 2 OF WEEK: LANCHE, JANTAR E CEIA                                     */}
             {/* ========================================================================= */}
-            <div className="bg-white rounded-xl border border-slate-300 shadow-md p-4 overflow-hidden print-page-block">
+            <div className="bg-white rounded-xl border border-slate-300 shadow-md p-4 overflow-hidden print-page-block print:overflow-visible print:border-none print:shadow-none print:p-0 print:m-0">
               {/* Header Banner with Logos */}
               <div className="flex items-center justify-between border-b-2 border-slate-300 pb-3 mb-3">
                 <div className="w-36 flex justify-start">
@@ -1565,17 +1833,17 @@ export default function MenuEditorPage({ params }: { params: Params }) {
               </div>
 
               {/* Table: Lanche, Jantar e Ceia */}
-              <div className="overflow-x-auto">
+              <div className="overflow-x-auto print:overflow-visible">
                 <table className="menu-grid-table border-collapse w-full text-[11px] text-black">
                   <thead>
                     <tr className="bg-slate-200 text-black">
-                      <th className="border border-slate-400 p-2 text-center font-bold text-xs uppercase w-32">
+                      <th className="border border-slate-400 p-2 text-center font-bold text-xs uppercase w-32 print:static print:border-[1.5px] print:border-black print:bg-slate-200">
                         REFEIÇÕES
                       </th>
                       {week.map((day, dayIdx) => {
                         if (!day) {
                           return (
-                            <th key={dayIdx} className="border border-slate-400 p-2 text-center font-bold text-xs uppercase bg-slate-100">
+                            <th key={dayIdx} className="border border-slate-400 p-2 text-center font-bold text-xs uppercase bg-slate-100 print:static print:border-[1.5px] print:border-black print:bg-slate-100">
                               CONTINUAÇÃO
                             </th>
                           );
@@ -1594,7 +1862,7 @@ export default function MenuEditorPage({ params }: { params: Params }) {
                             onDragOver={(e) => handleDragDayOver(day.date, e)}
                             onDragLeave={(e) => handleDragDayLeave(day.date, e)}
                             onDrop={(e) => handleDropDay(day.date, e)}
-                            className={`border border-slate-400 p-1.5 text-center font-bold text-xs uppercase cursor-grab active:cursor-grabbing transition-all select-none group relative ${
+                            className={`border border-slate-400 p-1.5 text-center font-bold text-xs uppercase cursor-grab active:cursor-grabbing transition-all select-none group relative print:static print:border-[1.5px] print:border-black print:bg-slate-200 ${
                               isDayDragging
                                 ? 'bg-amber-200 opacity-40 ring-2 ring-dashed ring-amber-600 scale-95'
                                 : isDayDropTarget
@@ -1619,15 +1887,42 @@ export default function MenuEditorPage({ params }: { params: Params }) {
                   <tbody>
                     {/* Row 1: LANCHE DA TARDE */}
                     <tr>
-                      <td className="border border-slate-400 p-2 font-bold text-center align-middle bg-[#dbeafe] text-sky-950 w-32">
+                      <td className="border border-slate-400 p-2 font-bold text-center align-middle bg-[#dbeafe] text-sky-950 w-32 print:static print:border-[1.5px] print:border-black">
                         LANCHE DA TARDE
                       </td>
                       {week.map((day, dayIdx) => (
-                        <td key={dayIdx} className="border border-slate-400 p-2 align-top bg-white">
+                        <td
+                          key={dayIdx}
+                          onDragOver={(e) => day && handleDragMealOver(day.date, 'afternoonSnack', e)}
+                          onDragLeave={(e) => day && handleDragMealLeave(day.date, 'afternoonSnack', e)}
+                          onDrop={(e) => day && handleDropMeal(day.date, 'afternoonSnack', e)}
+                          className={`border border-slate-400 p-2 align-top bg-white transition-all relative print:static print:border-[1.5px] print:border-black ${
+                            day && isMealDragging(day.date, 'afternoonSnack')
+                              ? 'opacity-40 bg-sky-50 ring-2 ring-dashed ring-sky-500'
+                              : day && isMealDropTarget(day.date, 'afternoonSnack')
+                              ? 'bg-amber-100 ring-2 ring-amber-500 scale-[1.01] shadow-lg font-bold'
+                              : ''
+                          }`}
+                        >
                           {day && (
                             <div className="space-y-1.5">
+                              {/* Draggable handle for whole Afternoon Snack */}
+                              <div
+                                draggable
+                                onDragStart={(e) => handleDragMealStart(day.date, 'afternoonSnack', e)}
+                                onDragEnd={handleDragEnd}
+                                className="flex items-center justify-between px-1.5 py-0.5 mb-1 rounded bg-sky-100/80 hover:bg-sky-200 text-sky-950 font-semibold cursor-grab active:cursor-grabbing text-[9px] transition-all no-print select-none border border-sky-300/70 shadow-xs group"
+                                title="Arraste para trocar todo o Lanche da Tarde deste dia com outro dia"
+                              >
+                                <span className="flex items-center gap-1">
+                                  <GripVertical className="w-3 h-3 text-sky-700 shrink-0" />
+                                  <span>Mover Lanche da Tarde</span>
+                                </span>
+                                <ArrowLeftRight className="w-2.5 h-2.5 text-sky-700 opacity-60 group-hover:opacity-100" />
+                              </div>
+
                               {/* Editable Afternoon Snack */}
-                              <div className="editable-cell p-0.5 rounded -mx-0.5">
+                              <div className="editable-cell p-0.5 rounded -mx-0.5 print:m-0">
                                 <DraggableCell
                                   as="p"
                                   date={day.date}
@@ -1696,15 +1991,42 @@ export default function MenuEditorPage({ params }: { params: Params }) {
 
                     {/* Row 2: JANTAR */}
                     <tr>
-                      <td className="border border-slate-400 p-2 font-bold text-center align-middle bg-[#fef3c7] text-amber-950 w-32">
+                      <td className="border border-slate-400 p-2 font-bold text-center align-middle bg-[#fef3c7] text-amber-950 w-32 print:static print:border-[1.5px] print:border-black">
                         JANTAR
                       </td>
                       {week.map((day, dayIdx) => (
-                        <td key={dayIdx} className="border border-slate-400 p-2 align-top bg-white">
+                        <td
+                          key={dayIdx}
+                          onDragOver={(e) => day && handleDragMealOver(day.date, 'dinner', e)}
+                          onDragLeave={(e) => day && handleDragMealLeave(day.date, 'dinner', e)}
+                          onDrop={(e) => day && handleDropMeal(day.date, 'dinner', e)}
+                          className={`border border-slate-400 p-2 align-top bg-white transition-all relative print:static print:border-[1.5px] print:border-black ${
+                            day && isMealDragging(day.date, 'dinner')
+                              ? 'opacity-40 bg-amber-50 ring-2 ring-dashed ring-amber-500'
+                              : day && isMealDropTarget(day.date, 'dinner')
+                              ? 'bg-amber-100 ring-2 ring-amber-500 scale-[1.01] shadow-lg font-bold'
+                              : ''
+                          }`}
+                        >
                           {day && (
                             <div className="space-y-1.5">
+                              {/* Draggable handle for whole Dinner */}
+                              <div
+                                draggable
+                                onDragStart={(e) => handleDragMealStart(day.date, 'dinner', e)}
+                                onDragEnd={handleDragEnd}
+                                className="flex items-center justify-between px-1.5 py-0.5 mb-1 rounded bg-amber-100/80 hover:bg-amber-200 text-amber-950 font-semibold cursor-grab active:cursor-grabbing text-[9px] transition-all no-print select-none border border-amber-300/70 shadow-xs group"
+                                title="Arraste para trocar todo o Jantar deste dia com outro dia"
+                              >
+                                <span className="flex items-center gap-1">
+                                  <GripVertical className="w-3 h-3 text-amber-700 shrink-0" />
+                                  <span>Mover Jantar Completo</span>
+                                </span>
+                                <ArrowLeftRight className="w-2.5 h-2.5 text-amber-700 opacity-60 group-hover:opacity-100" />
+                              </div>
+
                               {/* Editable Dinner */}
-                              <div className="editable-cell p-0.5 rounded -mx-0.5">
+                              <div className="editable-cell p-0.5 rounded -mx-0.5 print:m-0">
                                 <DraggableCell
                                   as="p"
                                   date={day.date}
@@ -1773,15 +2095,42 @@ export default function MenuEditorPage({ params }: { params: Params }) {
 
                     {/* Row 3: CEIA */}
                     <tr>
-                      <td className="border border-slate-400 p-2 font-bold text-center align-middle bg-[#fae8ff] text-purple-950 w-32">
+                      <td className="border border-slate-400 p-2 font-bold text-center align-middle bg-[#fae8ff] text-purple-950 w-32 print:static print:border-[1.5px] print:border-black">
                         CEIA
                       </td>
                       {week.map((day, dayIdx) => (
-                        <td key={dayIdx} className="border border-slate-400 p-2 align-top bg-white">
+                        <td
+                          key={dayIdx}
+                          onDragOver={(e) => day && handleDragMealOver(day.date, 'supper', e)}
+                          onDragLeave={(e) => day && handleDragMealLeave(day.date, 'supper', e)}
+                          onDrop={(e) => day && handleDropMeal(day.date, 'supper', e)}
+                          className={`border border-slate-400 p-2 align-top bg-white transition-all relative print:static print:border-[1.5px] print:border-black ${
+                            day && isMealDragging(day.date, 'supper')
+                              ? 'opacity-40 bg-purple-50 ring-2 ring-dashed ring-purple-500'
+                              : day && isMealDropTarget(day.date, 'supper')
+                              ? 'bg-amber-100 ring-2 ring-amber-500 scale-[1.01] shadow-lg font-bold'
+                              : ''
+                          }`}
+                        >
                           {day && (
                             <div className="space-y-2">
+                              {/* Draggable handle for whole Supper */}
+                              <div
+                                draggable
+                                onDragStart={(e) => handleDragMealStart(day.date, 'supper', e)}
+                                onDragEnd={handleDragEnd}
+                                className="flex items-center justify-between px-1.5 py-0.5 mb-1 rounded bg-purple-100/80 hover:bg-purple-200 text-purple-950 font-semibold cursor-grab active:cursor-grabbing text-[9px] transition-all no-print select-none border border-purple-300/70 shadow-xs group"
+                                title="Arraste para trocar toda a Ceia deste dia com outro dia"
+                              >
+                                <span className="flex items-center gap-1">
+                                  <GripVertical className="w-3 h-3 text-purple-700 shrink-0" />
+                                  <span>Mover Ceia Completa</span>
+                                </span>
+                                <ArrowLeftRight className="w-2.5 h-2.5 text-purple-700 opacity-60 group-hover:opacity-100" />
+                              </div>
+
                               {/* Editable Supper */}
-                              <div className="editable-cell p-0.5 rounded -mx-0.5">
+                              <div className="editable-cell p-0.5 rounded -mx-0.5 print:m-0">
                                 <DraggableCell
                                   as="p"
                                   date={day.date}

@@ -54,16 +54,43 @@ const RULE_CATEGORIES: { key: RuleCategory; label: string }[] = [
 
 const DEFAULT_COLORS = ['#059669', '#0891B2', '#7c3aed', '#d97706', '#e11d48', '#2563eb'];
 
+const DEFAULT_TENANTS: Tenant[] = [
+  {
+    id: 'lares-id',
+    name: 'Lares Casa de Repouso',
+    slug: 'lares',
+    logo_url: '/logos/lares.jpg',
+    primary_color: '#059669',
+    created_at: '2026-01-01',
+  },
+  {
+    id: 'vida-plena-id',
+    name: 'Casa de Repouso Vida Plena',
+    slug: 'vida-plena',
+    logo_url: '/logos/vida-plena.png',
+    primary_color: '#0891B2',
+    created_at: '2026-01-01',
+  },
+  {
+    id: 'vovo-alda-id',
+    name: 'Casa de Repouso Vovó Alda',
+    slug: 'vovo-alda',
+    logo_url: '/logos/vovo-alda.png',
+    primary_color: '#0284c7',
+    created_at: '2026-01-01',
+  },
+];
+
 export default function DashboardPage() {
   const router = useRouter();
   const [activeTab, setActiveTab] = useState<'generate' | 'tenants' | 'dishes' | 'rules'>('generate');
 
-  // Generator state
-  const [tenants, setTenants] = useState<Tenant[]>([]);
-  const [selectedTenant, setSelectedTenant] = useState<Tenant | null>(null);
+  // Generator state - instant initialization
+  const [tenants, setTenants] = useState<Tenant[]>(DEFAULT_TENANTS);
+  const [selectedTenant, setSelectedTenant] = useState<Tenant | null>(DEFAULT_TENANTS[0]);
   const [selectedMonth, setSelectedMonth] = useState(new Date().getMonth() + 1);
   const [selectedYear, setSelectedYear] = useState(new Date().getFullYear());
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(false);
   const [generating, setGenerating] = useState(false);
 
   // Tenant management state
@@ -95,71 +122,62 @@ export default function DashboardPage() {
   const [pingStatus, setPingStatus] = useState<'idle' | 'pinging' | 'success' | 'error'>('idle');
   const [pingMessage, setPingMessage] = useState<string>('');
 
-  // Initial load
+  // Initial load - parallel non-blocking background fetch
   useEffect(() => {
+    let isCancelled = false;
+
     async function loadData() {
-      // Fetch Tenants
-      const { data: tenantData } = await supabase
-        .from('tenants')
-        .select('*')
-        .order('name');
+      try {
+        const timeoutPromise = new Promise<{ timeout: true }>((resolve) =>
+          setTimeout(() => resolve({ timeout: true }), 4000)
+        );
 
-      const DEFAULT_TENANTS: Tenant[] = [
-        {
-          id: 'lares-id',
-          name: 'Lares Casa de Repouso',
-          slug: 'lares',
-          logo_url: '/logos/lares.jpg',
-          primary_color: '#059669',
-          created_at: '2026-01-01',
-        },
-        {
-          id: 'vida-plena-id',
-          name: 'Casa de Repouso Vida Plena',
-          slug: 'vida-plena',
-          logo_url: '/logos/vida-plena.png',
-          primary_color: '#0891B2',
-          created_at: '2026-01-01',
-        },
-        {
-          id: 'vovo-alda-id',
-          name: 'Casa de Repouso Vovó Alda',
-          slug: 'vovo-alda',
-          logo_url: '/logos/vovo-alda.png',
-          primary_color: '#0284c7',
-          created_at: '2026-01-01',
-        },
-      ];
+        const fetchPromise = Promise.all([
+          supabase.from('tenants').select('*').order('name'),
+          supabase.from('dishes').select('*').order('created_at', { ascending: false }),
+          supabase.from('menu_rules').select('*').order('created_at', { ascending: false }),
+        ]);
 
-      let list = tenantData ?? [];
-      for (const defTenant of DEFAULT_TENANTS) {
-        if (!list.find((t) => t.slug === defTenant.slug)) {
-          list.push(defTenant);
+        const result = await Promise.race([fetchPromise, timeoutPromise]);
+
+        if ('timeout' in result) {
+          return;
+        }
+
+        const [{ data: tenantData }, { data: dishesData }, { data: rulesData }] = result;
+
+        if (isCancelled) return;
+
+        let list = tenantData ?? [];
+        for (const defTenant of DEFAULT_TENANTS) {
+          if (!list.find((t) => t.slug === defTenant.slug)) {
+            list.push(defTenant);
+          }
+        }
+
+        setTenants(list);
+        if (list.length > 0) {
+          setSelectedTenant((prev) => prev ?? list[0]);
+        }
+        if (dishesData) {
+          setDishes(dishesData);
+        }
+        if (rulesData) {
+          setRules(rulesData);
+        }
+      } catch (err) {
+        console.warn('Erro ao carregar dados do painel:', err);
+      } finally {
+        if (!isCancelled) {
+          setLoading(false);
         }
       }
-
-      setTenants(list);
-      if (list.length > 0) {
-        setSelectedTenant(list[0]);
-      }
-
-      // Fetch Dishes
-      const { data: dishesData } = await supabase
-        .from('dishes')
-        .select('*')
-        .order('created_at', { ascending: false });
-      setDishes(dishesData ?? []);
-
-      // Fetch Rules
-      const { data: rulesData } = await supabase
-        .from('menu_rules')
-        .select('*')
-        .order('created_at', { ascending: false });
-      setRules(rulesData ?? []);
-
-      setLoading(false);
     }
     loadData();
+
+    return () => {
+      isCancelled = true;
+    };
   }, []);
 
   // Handle Keep-Alive Ping

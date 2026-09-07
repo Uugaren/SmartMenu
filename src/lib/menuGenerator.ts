@@ -25,6 +25,9 @@ import {
   getDinnerDiabetic,
   getSupper,
   LUNCH_SIDE,
+  NUTRITIONIST_LUNCH_DIABETIC,
+  NUTRITIONIST_LUNCH_PASTOSO,
+  NUTRITIONIST_SUPPER_DIABETIC,
 } from './menuRules';
 
 /**
@@ -243,193 +246,196 @@ export const NUTRITIONIST_VIDA_PLENA_DAYS: Record<number, NutritionistDailyPlan>
   },
 };
 
-// Cardápio fiel de Agosto para Casa de Repouso Vovó Alda
-export const NUTRITIONIST_VOVO_ALDA_DAYS: Record<number, NutritionistDailyPlan> = {
+// Cardápio fiel de Agosto para Casa de Repouso Vovó Alda (idêntico ao de Vida Plena no documento da nutróloga)
+export const NUTRITIONIST_VOVO_ALDA_DAYS: Record<number, NutritionistDailyPlan> = NUTRITIONIST_VIDA_PLENA_DAYS;
+
+// Cardápio fiel de Agosto para LARES Casa de Repouso (Semanas 1, 2, 3A, 4A e 5A do documento original)
+export const NUTRITIONIST_LARES_DAYS: Record<number, NutritionistDailyPlan> = {
   1: {
-    lunchMain: 'ESCONDIDINHO DE FRANGO',
-    lunchSide: 'Arroz /Feijão',
-    lunchSalad: 'Abóbora cozida, Salada de repolho roxo, tomate',
-    juice: 'Suco de Abacaxi',
-  },
-  2: {
-    lunchMain: 'COXA E SOBRECOXA ASSADA',
-    lunchSide: 'Arroz/ feijão',
-    lunchSalad: 'LEGUMES (CHUCHU E BATATA), Cenoura ralada',
-    juice: 'suco de abacaxi',
-  },
-  3: {
-    lunchMain: 'MÚSCULO ENSOPADO COM CHUCHU E CENOURA COZIDO',
-    lunchSide: 'Arroz com açafrão, Feijão caldo',
-    lunchSalad: 'Salada de alface',
-    juice: 'Suco acerola',
-  },
-  4: {
-    lunchMain: 'PEIXE EMPANADO (CAÇÃO) E PIRÃO',
-    lunchSide: 'Arroz/Feijão (opcional)',
-    lunchSalad: 'salada de repolho verde, banana frita',
-    juice: 'suco de abacaxi',
-  },
-  5: {
-    lunchMain: 'DOBRADINHA COM FEIJÃO BRANCO',
-    lunchSide: 'Arroz colorido (pimentão colorido), feijão',
-    lunchSalad: 'FAROFA DE BANANA, ALFACE E PEPINO',
-    juice: 'Suco de acerola',
-  },
-  6: {
-    lunchMain: 'ACÉM CUBOS COM BATATA',
-    lunchSide: 'Arroz com cenoura picadinha e cozida/Feijão',
-    lunchSalad: 'Salada de alface',
+    lunchMain: 'PEIXE EMPANADO',
+    lunchSide: 'Arroz/Feijão (opcional), Pirão',
+    lunchSalad: 'banana frita, Alface e tomate',
     juice: 'Suco de manga',
   },
-  7: {
-    lunchMain: 'CARNE DE PORCO PICADINHA',
+  2: {
+    lunchMain: 'ESCONDIDINHO DE CARNE MOÍDA',
     lunchSide: 'Arroz/ feijão',
-    lunchSalad: 'Purê de batatas cremoso, Alface e BETERRABA cozida',
-    juice: 'Suco de Manga',
-  },
-  8: {
-    lunchMain: 'ESCONDIDINHO DE CARNE SECA',
-    lunchSide: 'Arroz/ feijão (opcional)',
-    lunchSalad: 'abobrinha e chuchu cozidos',
-    juice: 'suco de manga',
-  },
-  9: {
-    lunchMain: 'PEIXE EMPANADO E PIRÃO',
-    lunchSide: 'Arroz/ feijão',
-    lunchSalad: 'TABULE',
+    lunchSalad: 'Legumes grelhados na manteiga(brócolis, couve flor e abobrinha), Alface e tomate',
     juice: 'Suco de abacaxi',
   },
-  10: {
-    lunchMain: 'FRICASSÉ DE FRANGO',
+  3: {
+    lunchMain: 'CARNE DE PORCO',
+    lunchSide: 'Arroz/ tutu a mineira',
+    lunchSalad: 'Jiló refogado, alface e tomate',
+    juice: 'Suco de goiaba',
+  },
+  4: {
+    lunchMain: 'SOBRECOXA ASSADA COM BATATA',
+    lunchSide: 'Arroz / Feijão, macarrão ao molho branco e ervas finas',
+    lunchSalad: 'Alface e tomate',
+    juice: 'Suco de Abacaxi',
+  },
+  5: {
+    lunchMain: 'ESTROGONOFE DE FRANGO',
     lunchSide: 'Arroz/ feijão',
-    lunchSalad: 'Vagem refogada, Repolho roxo picadinho',
-    juice: 'suco de goiaba',
+    lunchSalad: 'cenoura sauté, Alface e tomate',
+    juice: 'Suco de abacaxi',
+  },
+  6: {
+    lunchMain: 'OMELETE DE QUEIJO',
+    lunchSide: 'Arroz/ feijão, maionese',
+    lunchSalad: 'Alface e tomate',
+    juice: 'Suco de acerola',
+  },
+  7: {
+    lunchMain: 'MÚSCULO EM CUBOS',
+    lunchSide: 'Arroz com cenoura picadinha e cozida/Feijão, Purê de batata',
+    lunchSalad: 'Alface e tomate',
+    juice: 'Suco de manga',
+  },
+  8: {
+    lunchMain: 'SOBRECOXA ASSADA',
+    lunchSide: 'Arroz/ feijão, PURÊ DE INHAME',
+    lunchSalad: 'Alface e tomate',
+    juice: 'Suco de abacaxi',
+  },
+  9: {
+    lunchMain: 'LASANHA DE CARNE MOÍDA',
+    lunchSide: 'Arroz/ feijão',
+    lunchSalad: 'brócolis refogado na manteiga, Alface e tomate',
+    juice: 'Suco de goiaba',
+  },
+  10: {
+    lunchMain: 'ESTROGONOFF DE BOI (PALETA NA PRESSÃO)',
+    lunchSide: 'Arroz/ feijão',
+    lunchSalad: 'vagem refogada, alface e tomate',
+    juice: 'Suco de goiaba',
   },
   11: {
-    lunchMain: 'ALMÔNDEGAS AO MOLHO COM TEMPERO VERDE E ORÉGANO',
-    lunchSide: 'Arroz/ feijão, macarrão ao alho e óleo',
-    lunchSalad: 'jiló e cenoura cozida',
-    juice: 'Suco abacaxi',
+    lunchMain: 'MÚSCULO ENSOPADO COM BATATA',
+    lunchSide: 'Arroz/ feijão, farofa de banana',
+    lunchSalad: 'alface e tomate',
+    juice: 'Suco de abacaxi',
   },
   12: {
-    lunchMain: 'LINGUIÇA DE CHURRASCO E PURÊ DE BATATA',
+    lunchMain: 'OMELETE DE FORNO (QUEIJO PRA GRATINAR)',
     lunchSide: 'Arroz/ feijão',
-    lunchSalad: 'Chuchu e beterraba cozidos',
+    lunchSalad: 'seleta de legumes (3 no máximo), alface e tomate',
     juice: 'Suco de goiaba',
   },
   13: {
-    lunchMain: 'LASANHA DE FRANGO COM MUSSARELA',
-    lunchSide: 'Arroz/ feijão',
-    lunchSalad: 'abóbora cozida e salada de agrião com alface',
-    juice: 'Suco de goiaba',
-  },
-  14: {
-    lunchMain: 'SOBRECOXA ASSADA E PURÊ DE BATATA',
-    lunchSide: 'Arroz, Feijão tropeiro',
-    lunchSalad: 'salada de agrião e pepino',
-    juice: 'suco de acerola',
-  },
-  15: {
-    lunchMain: 'CARNE DE PORCO EM CUBOS ENSOPADA COM TOMATE, PIMENTÃO COLORIDO',
-    lunchSide: 'Arroz, tutu',
-    lunchSalad: 'pepino e alface',
-    juice: 'suco de acerola',
-  },
-  16: {
-    lunchMain: 'MÚSCULO ENSOPADO E PURÊ DE INHAME',
-    lunchSide: 'Arroz/ feijão',
-    lunchSalad: 'Salada de Agrião e couve, melão',
-    juice: 'Suco abacaxi',
-  },
-  17: {
-    lunchMain: 'FRANGO COM QUIABO E POLENTA',
-    lunchSide: 'Arroz / Feijão',
-    lunchSalad: 'Couve refogada',
-    juice: 'Suco de Abacaxi',
-  },
-  18: {
-    lunchMain: 'BIFE À PIZZAIOLO E CREME DE MILHO',
-    lunchSide: 'Arroz/ feijão',
-    lunchSalad: 'abobrinha cozida',
+    lunchMain: 'PEIXE EMPANADO',
+    lunchSide: 'Arroz/ feijão, pirão',
+    lunchSalad: 'Moqueca de Banana, Alface e tomate',
     juice: 'Suco de abacaxi',
   },
-  19: {
+  14: {
+    lunchMain: 'FEIJOADA (CARNE DE PORCO, LINGUIÇA)',
+    lunchSide: 'Arroz',
+    lunchSalad: 'couve refogada, alface e tomate',
+    juice: 'Suco de manga',
+  },
+  15: {
     lunchMain: 'MOQUECA DE PEIXE',
-    lunchSide: 'arroz/ feijão',
-    lunchSalad: 'Vinagrete de lentilha, moqueca de banana',
-    juice: 'suco de abacaxi',
+    lunchSide: 'Arroz/ feijão',
+    lunchSalad: 'banana frita, alface e tomate',
+    juice: 'Suco de abacaxi',
+  },
+  16: {
+    lunchMain: 'ESCONDIDINHO DE CARNE MOÍDA',
+    lunchSide: 'Arroz/ feijão',
+    lunchSalad: 'repolho roxo refogado com manjericão, alface e tomate',
+    juice: 'Suco de abacaxi',
+  },
+  17: {
+    lunchMain: 'OMELETE COM QUEIJO',
+    lunchSide: 'Arroz /Feijão',
+    lunchSalad: 'Seleta de legumes (3 no máximo), Alface e tomate',
+    juice: 'Suco de goiaba',
+  },
+  18: {
+    lunchMain: 'COXA E SOBRECOXA ASSADA COM BATATA',
+    lunchSide: 'Arroz/ feijão',
+    lunchSalad: 'jiló ensopado, Alface e tomate',
+    juice: 'Suco de goiaba',
+  },
+  19: {
+    lunchMain: 'CARNE DE PORCO EM CUBOS',
+    lunchSide: 'Arroz, feijão, tutu à mineira',
+    lunchSalad: 'beterraba cozida, Alface e tomate',
+    juice: 'Suco de acerola',
   },
   20: {
-    lunchMain: 'STROGONOFF DE FRANGO',
-    lunchSide: 'arroz/ feijão',
-    lunchSalad: 'vagem cozida, Salada de agrião e tomate, Melão',
+    lunchMain: 'MÚSCULO ENSOPADO',
+    lunchSide: 'Arroz/ feijão (opcional), purê de inhame',
+    lunchSalad: 'couve flor na manteiga, Alface e tomate',
     juice: 'Suco de manga',
   },
   21: {
-    lunchMain: 'PALETA EM TIRAS PEQUENAS NA PRESSÃO E SUFLÊ DE CHUCHU',
-    lunchSide: 'Arroz, feijão',
+    lunchMain: 'STROGONOFF DE FRANGO',
+    lunchSide: 'Arroz/ feijão, batata palha',
+    lunchSalad: 'abobrinha cozida, Alface e tomate',
+    juice: 'Suco de abacaxi',
+  },
+  22: {
+    lunchMain: 'ESCONDIDINHO DE CARNE MOÍDA',
+    lunchSide: 'Arroz/ feijão',
+    lunchSalad: 'Brócolis na manteiga, Alface e tomate',
+    juice: 'Suco de manga',
+  },
+  23: {
+    lunchMain: 'CARNE DE PORCO EM CUBOS',
+    lunchSide: 'Arroz, Tutu à mineira',
+    lunchSalad: 'couve refogada, Alface e tomate',
+    juice: 'Suco de acerola',
+  },
+  24: {
+    lunchMain: 'OMELETE DE QUEIJO',
+    lunchSide: 'Arroz / feijão',
+    lunchSalad: 'Seleta de legumes (3 no máximo), alface e tomate',
+    juice: 'Suco de acerola',
+  },
+  25: {
+    lunchMain: 'PALETA EM TIRAS PEQUENAS NA PRESSÃO',
+    lunchSide: 'Arroz, feijão, purê de aipim',
     lunchSalad: 'Alface e tomate',
     juice: 'Suco de goiaba',
   },
-  22: {
-    lunchMain: 'FRANGO XADREZ (PIMENTÃO AMARELO, CENOURA, BRÓCOLIS)',
-    lunchSide: 'Arroz com ervilha, Feijão',
-    lunchSalad: 'salada de agrião e pepino',
-    juice: 'suco de acerola',
-  },
-  23: {
-    lunchMain: 'CASSOULET E BANANA DA TERRA FRITA',
-    lunchSide: 'Arroz',
-    lunchSalad: 'Maxixe ensopado, Melão',
-    juice: 'Suco de manga',
-  },
-  24: {
-    lunchMain: 'PANQUECA DE CARNE MOÍDA',
-    lunchSide: 'Arroz/ feijão',
-    lunchSalad: 'Abobrinha refogada, Pepino e alface',
-    juice: 'Suco de abacaxi',
-  },
-  25: {
-    lunchMain: 'CARNE SECA COM ABÓBORA',
-    lunchSide: 'Arroz/ feijão',
-    lunchSalad: 'chuchu e beterraba, Mamão',
-    juice: 'Suco abacaxi',
-  },
   26: {
-    lunchMain: 'MACARRONADA À BOLONHESA',
-    lunchSide: 'Massa',
-    lunchSalad: 'SALADA DE ALFACE/ RÚCULA E MANGA',
-    juice: 'Suco abacaxi',
-  },
-  27: {
-    lunchMain: 'CARNE DE PORCO PICADINHA COM TOMATE E TUTU À MINEIRA',
-    lunchSide: 'Arroz / tutu à mineira',
-    lunchSalad: 'Beterraba cozida',
-    juice: 'suco de acerola',
-  },
-  28: {
-    lunchMain: 'PEIXE EMPANADO (CAÇÃO) E RATATOUILLE',
-    lunchSide: 'Arroz/ feijão',
-    lunchSalad: 'RATATOUILLE',
+    lunchMain: 'MACARRONADA BOLONHESA (AZEITONA, MILHO E MANJERICÃO)',
+    lunchSide: 'Arroz /Feijão',
+    lunchSalad: 'Cenoura na manteiga, Alface e tomate',
     juice: 'Suco de goiaba',
   },
-  29: {
-    lunchMain: 'SOBRECOXA ASSADA E PURÊ DE BATATAS',
-    lunchSide: 'Arroz/ feijão',
-    lunchSalad: 'jiló ensopadinho, Cenoura cozida picada',
+  27: {
+    lunchMain: 'FRANGO COM QUIABO',
+    lunchSide: 'Arroz/ feijão, Polenta',
+    lunchSalad: 'Jiló ensopada, Salada de alface e tomate',
     juice: 'Suco de manga',
   },
-  30: {
-    lunchMain: 'BOBÓ DE CAMARÃO E BANANA FRITA',
+  28: {
+    lunchMain: 'MÚSCULO ENSOPADO',
+    lunchSide: 'Arroz/feijão, Farofa de banana',
+    lunchSalad: 'beterraba cozida, Alface e tomate',
+    juice: 'Suco de Manga',
+  },
+  29: {
+    lunchMain: 'SOBRECOXA ASSADA ENSOPADA',
     lunchSide: 'Arroz/ feijão',
-    lunchSalad: 'abobrinha cozida, SALADA DE FOLHAS',
+    lunchSalad: 'Jiló picadinho, alface e tomate',
+    juice: 'Suco de acerola',
+  },
+  30: {
+    lunchMain: 'STROGONOFF DE FRANGO',
+    lunchSide: 'Arroz/ feijão, batata palha',
+    lunchSalad: 'beterraba cozida, Alface e tomate',
     juice: 'Suco de abacaxi',
   },
   31: {
-    lunchMain: 'CARNE MOÍDA COM LEGUMES (CHUCHU E CENOURA)',
-    lunchSide: 'Arroz/ feijão, macarrão ao alho e óleo',
-    lunchSalad: 'Salada de folhas',
-    juice: 'suco de abacaxi',
+    lunchMain: 'CARNE MOÍDA COM CENOURA',
+    lunchSide: 'Arroz/ feijão, purê de batata',
+    lunchSalad: 'Alface e tomate',
+    juice: 'Suco de abacaxi',
   },
 };
 
@@ -468,10 +474,14 @@ export function generateMonthlyMenu(
     const planIndex = ((day - 1) % 31) + 1;
     let nutritionistPlan: NutritionistDailyPlan | null = null;
 
-    if (tenant.slug === 'vida-plena') {
+    if (tenant.slug === 'lares') {
+      nutritionistPlan = NUTRITIONIST_LARES_DAYS[planIndex];
+    } else if (tenant.slug === 'vida-plena') {
       nutritionistPlan = NUTRITIONIST_VIDA_PLENA_DAYS[planIndex];
     } else if (tenant.slug === 'vovo-alda') {
       nutritionistPlan = NUTRITIONIST_VOVO_ALDA_DAYS[planIndex];
+    } else {
+      nutritionistPlan = NUTRITIONIST_LARES_DAYS[planIndex] || NUTRITIONIST_VIDA_PLENA_DAYS[planIndex];
     }
 
     // Almoço: prato principal
@@ -496,12 +506,12 @@ export function generateMonthlyMenu(
       weekOfMonth,
 
       // Café da manhã
-      breakfast: getBreakfast(dayIndex),
-      breakfastDiabetic: getBreakfastDiabetic(dayIndex),
-      breakfastPastoso: getBreakfastPastoso(dayIndex),
+      breakfast: getBreakfast(day),
+      breakfastDiabetic: getBreakfastDiabetic(day),
+      breakfastPastoso: getBreakfastPastoso(day),
 
       // Colação
-      colacao: getColacao(dayIndex),
+      colacao: getColacao(day),
 
       // Almoço
       lunchMain: mainDish?.name ?? 'A definir',
@@ -510,20 +520,20 @@ export function generateMonthlyMenu(
       lunchSide: lunchSide,
       juice: juice,
       dessert: getDessert(dayOfWeek, sundayCounter - 1),
-      lunchDiabetic: 'Colocar mais folhas cruas ½ porção de cada carboidratos, se houver mais de 1 opção.',
-      lunchPastoso: 'colocar módulo de fibras (1 colher de chá)',
+      lunchDiabetic: NUTRITIONIST_LUNCH_DIABETIC,
+      lunchPastoso: NUTRITIONIST_LUNCH_PASTOSO,
 
       // Lanche da tarde
-      afternoonSnack: getAfternoonSnack(dayOfWeek, weekOfMonth),
-      afternoonSnackDiabetic: getAfternoonSnackDiabetic(dayOfWeek),
+      afternoonSnack: getAfternoonSnack(day, dayOfWeek, weekOfMonth),
+      afternoonSnackDiabetic: getAfternoonSnackDiabetic(),
 
       // Jantar
-      dinner: getDinner(dayIndex),
+      dinner: getDinner(day),
       dinnerDiabetic: getDinnerDiabetic(),
 
       // Ceia
-      supper: getSupper(dayIndex),
-      supperDiabetic: 'Mingau de aveia com adoçante ou Escolher 2 opções: Queijo, Ovo, pão integral, banana cozida com canela e farelo de aveia, batata doce, aipim com queijo minas, café com leite e adoçante, Iogurte diet.',
+      supper: getSupper(day),
+      supperDiabetic: NUTRITIONIST_SUPPER_DIABETIC,
     };
 
     dailyMeals.push(meal);

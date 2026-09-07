@@ -89,9 +89,11 @@ h1, h2, h3, h4, h5, h6 {
     break-inside: avoid !important;
     page-break-inside: avoid !important;
     margin-top: 0 !important;
-    padding-top: 0 !important;
+    padding: 0 !important;
     box-shadow: none !important;
+    border: none !important;
     border-radius: 0 !important;
+    overflow: visible !important;
   }
 
   .print-page-block:first-of-type {
@@ -99,20 +101,48 @@ h1, h2, h3, h4, h5, h6 {
     page-break-before: auto !important;
   }
 
-  .menu-grid-table {
+  .overflow-x-auto {
+    overflow: visible !important;
+  }
+
+  /* Table borders in print: strong 1.5px solid black borders on all 4 sides of every cell */
+  table.menu-grid-table {
+    border-collapse: collapse !important;
+    border-spacing: 0 !important;
+    width: 100% !important;
+    border: 2px solid #000000 !important;
     font-size: 7.5pt !important;
     line-height: 1.25 !important;
-    width: 100% !important;
+    table-layout: fixed !important;
   }
 
-  .menu-grid-table th,
-  .menu-grid-table td {
+  table.menu-grid-table th,
+  table.menu-grid-table td {
+    position: static !important;
+    transform: none !important;
+    box-shadow: none !important;
     padding: 3px 4px !important;
-    border: 1px solid #64748b !important;
+    border: 1.5px solid #000000 !important;
+    border-color: #000000 !important;
+    background-clip: padding-box !important;
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+    box-sizing: border-box !important;
   }
 
-  .menu-grid-table th {
+  table.menu-grid-table thead tr th {
+    border: 1.5px solid #000000 !important;
+    border-bottom: 2px solid #000000 !important;
     font-weight: 700 !important;
+    background-color: #e2e8f0 !important;
+  }
+
+  table.menu-grid-table tbody tr td {
+    border: 1.5px solid #000000 !important;
+  }
+
+  .editable-cell {
+    margin: 0 !important;
   }
 }
 
