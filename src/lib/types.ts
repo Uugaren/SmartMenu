@@ -50,6 +50,14 @@ export interface MenuRule {
   created_at: string;
 }
 
+export type MealSlot = 'breakfast' | 'lunch' | 'afternoonSnack' | 'dinner' | 'supper';
+
+export interface ExtraMealItem {
+  id: string;
+  text: string;
+  dishId?: string | null;
+}
+
 export interface MonthlyMenu {
   id: string;
   tenant_id: string;
@@ -104,6 +112,9 @@ export interface DailyMeal {
   // Ceia
   supper: string;
   supperDiabetic?: string;
+
+  // Itens extras opcionais por refeição (ex: sobremesa a mais no almoço)
+  extras?: Partial<Record<MealSlot, ExtraMealItem[]>>;
 }
 
 export interface GeneratedMenu {

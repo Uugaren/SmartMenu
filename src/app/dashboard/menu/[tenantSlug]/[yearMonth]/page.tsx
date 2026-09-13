@@ -19,11 +19,13 @@ import {
   GripVertical,
   ArrowLeftRight,
   Sparkles,
+  Plus,
+  X,
 } from 'lucide-react';
 import { format, parse } from 'date-fns';
 import { supabase } from '@/lib/supabase';
 import { generateMonthlyMenu, organizeIntoWeeks } from '@/lib/menuGenerator';
-import type { Tenant, Dish, DailyMeal, MonthlyMenu, DishCategory } from '@/lib/types';
+import type { Tenant, Dish, DailyMeal, MonthlyMenu, DishCategory, MealSlot, ExtraMealItem } from '@/lib/types';
 import {
   BREAKFAST_FRUITS,
   JUICES,
@@ -39,7 +41,7 @@ const MONTHS = [
   'JULHO', 'AGOSTO', 'SETEMBRO', 'OUTUBRO', 'NOVEMBRO', 'DEZEMBRO',
 ];
 
-export type MealType = 'breakfast' | 'lunch' | 'afternoonSnack' | 'dinner' | 'supper';
+export type MealType = MealSlot;
 
 export const MEAL_FIELDS_MAP: Record<MealType, (keyof DailyMeal)[]> = {
   breakfast: ['breakfast', 'colacao', 'breakfastDiabetic', 'breakfastPastoso'],
@@ -227,8 +229,91 @@ function CreatableInlineDropdown({
 }
 
 // ============================================================================
-// Draggable Cell wrapper for drag and drop item swap
+// Optional extra item(s) per meal (e.g. an extra dessert at lunch).
+// Fully optional: shows only a discreet "+" button (never printed) when empty.
 // ============================================================================
+function MealExtras({
+  extras,
+  dishOptions,
+  onAdd,
+  onUpdate,
+  onRemove,
+}: {
+  extras: ExtraMealItem[];
+  dishOptions: { id: string; name: string }[];
+  onAdd: (text: string, dishId?: string) => void;
+  onUpdate: (itemId: string, text: string) => void;
+  onRemove: (itemId: string) => void;
+}) {
+  const [adding, setAdding] = useState(false);
+  const [editingId, setEditingId] = useState<string | null>(null);
+
+  return (
+    <div className="mt-1 space-y-1" onClick={(e) => e.stopPropagation()}>
+      {extras.map((item) =>
+        editingId === item.id ? (
+          <CreatableInlineDropdown
+            key={item.id}
+            options={dishOptions}
+            value={item.text}
+            onSelect={(val) => {
+              onUpdate(item.id, val);
+              setEditingId(null);
+            }}
+            onClose={() => setEditingId(null)}
+            placeholder="Editar item extra..."
+          />
+        ) : (
+          <div
+            key={item.id}
+            className="group/extra flex items-center gap-1 text-[10px] text-emerald-900 bg-emerald-50 border border-emerald-200 rounded px-1.5 py-0.5"
+          >
+            <span
+              className="flex-1 cursor-pointer break-words"
+              onClick={() => setEditingId(item.id)}
+              title="Clique para editar este item extra"
+            >
+              + {item.text}
+            </span>
+            <button
+              type="button"
+              onClick={() => onRemove(item.id)}
+              className="no-print shrink-0 text-red-400 hover:text-red-600 opacity-0 group-hover/extra:opacity-100 transition-opacity"
+              aria-label="Remover item extra"
+              title="Remover item extra"
+            >
+              <X className="w-2.5 h-2.5" />
+            </button>
+          </div>
+        )
+      )}
+
+      {adding ? (
+        <CreatableInlineDropdown
+          options={dishOptions}
+          value={null}
+          onSelect={(val, dishId) => {
+            onAdd(val, dishId);
+            setAdding(false);
+          }}
+          onClose={() => setAdding(false)}
+          placeholder="Item extra (texto livre ou item do banco)..."
+        />
+      ) : (
+        <button
+          type="button"
+          onClick={() => setAdding(true)}
+          className="no-print flex items-center justify-center w-4 h-4 rounded-full text-slate-400 hover:text-emerald-700 hover:bg-emerald-100 transition-colors"
+          aria-label="Adicionar item extra opcional"
+          title="Adicionar item extra opcional"
+        >
+          <Plus className="w-3 h-3" />
+        </button>
+      )}
+    </div>
+  );
+}
+
 // ============================================================================
 // Draggable Cell wrapper for drag and drop item swap
 // ============================================================================
@@ -472,6 +557,7 @@ export default function MenuEditorPage({ params }: { params: Params }) {
                 dinnerDiabetic: mealData.dinnerDiabetic ?? day.dinnerDiabetic,
                 supper: mealData.supper ?? day.supper,
                 supperDiabetic: mealData.supperDiabetic ?? day.supperDiabetic,
+                extras: mealData.extras ?? day.extras,
               };
             }
             return day;
@@ -525,6 +611,7 @@ export default function MenuEditorPage({ params }: { params: Params }) {
         dayOfWeek: 'cafe',
         weekOfMonth: 'cafe',
         lunchMainDishId: 'prato_principal',
+        extras: 'prato_principal',
       };
 
       const category = FIELD_CATEGORY_MAP[field] || 'prato_principal';
@@ -581,6 +668,64 @@ export default function MenuEditorPage({ params }: { params: Params }) {
       setEditingCell(null);
     },
     [dishes, tenant]
+  );
+
+  // Add / update / remove an optional extra item for a given meal (e.g. extra dessert at lunch)
+  const addExtraItem = useCallback(
+    (date: string, mealType: MealType, text: string, dishId?: string) => {
+      const trimmed = text.trim();
+      if (!trimmed) return;
+      const newItem: ExtraMealItem = {
+        id: `extra-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+        text: trimmed,
+        dishId: dishId ?? null,
+      };
+      setDays((prev) =>
+        prev.map((day) => {
+          if (day.date !== date) return day;
+          const currentExtras = day.extras?.[mealType] ?? [];
+          return { ...day, extras: { ...day.extras, [mealType]: [...currentExtras, newItem] } };
+        })
+      );
+    },
+    []
+  );
+
+  const updateExtraItem = useCallback(
+    (date: string, mealType: MealType, itemId: string, text: string) => {
+      const trimmed = text.trim();
+      if (!trimmed) return;
+      setDays((prev) =>
+        prev.map((day) => {
+          if (day.date !== date) return day;
+          const currentExtras = day.extras?.[mealType] ?? [];
+          return {
+            ...day,
+            extras: {
+              ...day.extras,
+              [mealType]: currentExtras.map((item) => (item.id === itemId ? { ...item, text: trimmed } : item)),
+            },
+          };
+        })
+      );
+    },
+    []
+  );
+
+  const removeExtraItem = useCallback(
+    (date: string, mealType: MealType, itemId: string) => {
+      setDays((prev) =>
+        prev.map((day) => {
+          if (day.date !== date) return day;
+          const currentExtras = day.extras?.[mealType] ?? [];
+          return {
+            ...day,
+            extras: { ...day.extras, [mealType]: currentExtras.filter((item) => item.id !== itemId) },
+          };
+        })
+      );
+    },
+    []
   );
 
   // Helper check for cell drag highlight
@@ -663,6 +808,7 @@ export default function MenuEditorPage({ params }: { params: Params }) {
             for (const field of MEAL_FIELDS) {
               (updated as any)[field] = targetDay[field];
             }
+            updated.extras = targetDay.extras;
             return updated;
           }
           if (day.date === targetDate) {
@@ -670,6 +816,7 @@ export default function MenuEditorPage({ params }: { params: Params }) {
             for (const field of MEAL_FIELDS) {
               (updated as any)[field] = sourceDay[field];
             }
+            updated.extras = sourceDay.extras;
             return updated;
           }
           return day;
@@ -707,6 +854,7 @@ export default function MenuEditorPage({ params }: { params: Params }) {
             for (const field of fieldsToSwap) {
               (updated as any)[field] = targetDay[field];
             }
+            updated.extras = { ...day.extras, [mealType]: targetDay.extras?.[mealType] };
             return updated;
           }
           if (day.date === targetDate) {
@@ -714,6 +862,7 @@ export default function MenuEditorPage({ params }: { params: Params }) {
             for (const field of fieldsToSwap) {
               (updated as any)[field] = sourceDay[field];
             }
+            updated.extras = { ...day.extras, [mealType]: sourceDay.extras?.[mealType] };
             return updated;
           }
           return day;
@@ -1064,6 +1213,7 @@ export default function MenuEditorPage({ params }: { params: Params }) {
         dinnerDiabetic: day.dinnerDiabetic,
         supper: day.supper,
         supperDiabetic: day.supperDiabetic,
+        extras: day.extras,
       },
       notes: null,
     }));
@@ -1093,6 +1243,11 @@ export default function MenuEditorPage({ params }: { params: Params }) {
   };
 
   const weeks = organizeIntoWeeks(days);
+
+  // All dishes from the DB, for the "add extra item" dropdown (any category)
+  const allDishOptions = Array.from(
+    new Map(dishes.map((d) => [d.name, { id: d.id, name: d.name }])).values()
+  );
 
   // Filter dishes by categories + fallbacks
   const getOptionsForField = (field: keyof DailyMeal): { id: string; name: string }[] => {
@@ -1586,6 +1741,15 @@ export default function MenuEditorPage({ params }: { params: Params }) {
                                   ( FAZER PARA LANCHE DA TARDE TAMBÉM)
                                 </span>
                               </div>
+
+                              {/* Optional extra item(s) */}
+                              <MealExtras
+                                extras={day.extras?.breakfast ?? []}
+                                dishOptions={allDishOptions}
+                                onAdd={(text, dishId) => addExtraItem(day.date, 'breakfast', text, dishId)}
+                                onUpdate={(itemId, text) => updateExtraItem(day.date, 'breakfast', itemId, text)}
+                                onRemove={(itemId) => removeExtraItem(day.date, 'breakfast', itemId)}
+                              />
                             </div>
                           )}
                         </td>
@@ -1817,6 +1981,15 @@ export default function MenuEditorPage({ params }: { params: Params }) {
                                   {day.lunchPastoso ?? 'colocar módulo de fibras (1 colher de chá)'}
                                 </DraggableCell>
                               </div>
+
+                              {/* Optional extra item(s) */}
+                              <MealExtras
+                                extras={day.extras?.lunch ?? []}
+                                dishOptions={allDishOptions}
+                                onAdd={(text, dishId) => addExtraItem(day.date, 'lunch', text, dishId)}
+                                onUpdate={(itemId, text) => updateExtraItem(day.date, 'lunch', itemId, text)}
+                                onRemove={(itemId) => removeExtraItem(day.date, 'lunch', itemId)}
+                              />
                             </div>
                           )}
                         </td>
@@ -1997,6 +2170,15 @@ export default function MenuEditorPage({ params }: { params: Params }) {
                                   {day.afternoonSnackDiabetic ?? 'Escolher 3 opções: Queijo, Ovo, pão integral, banana cozida com canela e farelo de aveia, batata doce, aipim com queijo minas, café com leite e adoçante, Iogurte diet.'}
                                 </DraggableCell>
                               </div>
+
+                              {/* Optional extra item(s) */}
+                              <MealExtras
+                                extras={day.extras?.afternoonSnack ?? []}
+                                dishOptions={allDishOptions}
+                                onAdd={(text, dishId) => addExtraItem(day.date, 'afternoonSnack', text, dishId)}
+                                onUpdate={(itemId, text) => updateExtraItem(day.date, 'afternoonSnack', itemId, text)}
+                                onRemove={(itemId) => removeExtraItem(day.date, 'afternoonSnack', itemId)}
+                              />
                             </div>
                           )}
                         </td>
@@ -2101,6 +2283,15 @@ export default function MenuEditorPage({ params }: { params: Params }) {
                                   {day.dinnerDiabetic || 'Repetir o almoço, porém ½ porção de carboidratos ou caldo de legumes com módulo de fibras( 1 colher de chá)'}
                                 </DraggableCell>
                               </div>
+
+                              {/* Optional extra item(s) */}
+                              <MealExtras
+                                extras={day.extras?.dinner ?? []}
+                                dishOptions={allDishOptions}
+                                onAdd={(text, dishId) => addExtraItem(day.date, 'dinner', text, dishId)}
+                                onUpdate={(itemId, text) => updateExtraItem(day.date, 'dinner', itemId, text)}
+                                onRemove={(itemId) => removeExtraItem(day.date, 'dinner', itemId)}
+                              />
                             </div>
                           )}
                         </td>
@@ -2205,6 +2396,15 @@ export default function MenuEditorPage({ params }: { params: Params }) {
                                   {day.supperDiabetic ?? 'Mingau de aveia com adoçante ou Escolher 2 opções: Queijo, Ovo, pão integral, banana cozida com canela e farelo de aveia, batata doce, aipim com queijo minas, café com leite e adoçante, Iogurte diet.'}
                                 </DraggableCell>
                               </div>
+
+                              {/* Optional extra item(s) */}
+                              <MealExtras
+                                extras={day.extras?.supper ?? []}
+                                dishOptions={allDishOptions}
+                                onAdd={(text, dishId) => addExtraItem(day.date, 'supper', text, dishId)}
+                                onUpdate={(itemId, text) => updateExtraItem(day.date, 'supper', itemId, text)}
+                                onRemove={(itemId) => removeExtraItem(day.date, 'supper', itemId)}
+                              />
                             </div>
                           )}
                         </td>

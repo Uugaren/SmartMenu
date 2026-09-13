@@ -484,15 +484,18 @@ export function generateMonthlyMenu(
       nutritionistPlan = NUTRITIONIST_LARES_DAYS[planIndex] || NUTRITIONIST_VIDA_PLENA_DAYS[planIndex];
     }
 
-    // Almoço: prato principal (prioriza os pratos cadastrados no Supabase)
-    const mainDish = mainDishes.length > 0
-      ? mainDishes[dayIndex % mainDishes.length]
-      : (nutritionistPlan ? { name: nutritionistPlan.lunchMain, id: null } : null);
+    // Almoço: prato principal — SEMPRE prioriza o cardápio fixo e validado da nutróloga
+    // para o dia/tenant. Os pratos cadastrados no Supabase (`dishes`) só servem de
+    // fallback quando não há plano fixo para aquele dia (e como sugestão nos dropdowns
+    // de edição manual, ver getOptionsForField na tela do editor).
+    const mainDish = nutritionistPlan
+      ? { name: nutritionistPlan.lunchMain, id: null as string | null }
+      : (mainDishes.length > 0 ? mainDishes[dayIndex % mainDishes.length] : null);
 
-    // Salada (prioriza as saladas cadastradas no Supabase)
-    const salad = salads.length > 0
-      ? salads[dayIndex % salads.length]?.name
-      : (nutritionistPlan ? nutritionistPlan.lunchSalad : 'Salada do dia');
+    // Salada — mesma prioridade: plano fixo da nutróloga primeiro, Supabase como fallback
+    const salad = nutritionistPlan
+      ? nutritionistPlan.lunchSalad
+      : (salads.length > 0 ? salads[dayIndex % salads.length]?.name : 'Salada do dia');
 
     // Acompanhamento
     const lunchSide = nutritionistPlan ? nutritionistPlan.lunchSide : LUNCH_SIDE;
