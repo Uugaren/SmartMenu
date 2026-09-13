@@ -249,7 +249,7 @@ function MealExtras({
   const [editingId, setEditingId] = useState<string | null>(null);
 
   return (
-    <div className="mt-1 space-y-1" onClick={(e) => e.stopPropagation()}>
+    <div className="mt-1 space-y-1 w-full min-w-0" onClick={(e) => e.stopPropagation()}>
       {extras.map((item) =>
         editingId === item.id ? (
           <CreatableInlineDropdown
@@ -266,14 +266,14 @@ function MealExtras({
         ) : (
           <div
             key={item.id}
-            className="group/extra flex items-center gap-1 text-[10px] text-emerald-900 bg-emerald-50 border border-emerald-200 rounded px-1.5 py-0.5"
+            className="group/extra flex items-start gap-1 w-full min-w-0 text-[11px] leading-tight"
           >
             <span
-              className="flex-1 cursor-pointer break-words"
+              className="flex-1 min-w-0 cursor-pointer break-words [overflow-wrap:anywhere]"
               onClick={() => setEditingId(item.id)}
               title="Clique para editar este item extra"
             >
-              + {item.text}
+              {item.text}
             </span>
             <button
               type="button"
