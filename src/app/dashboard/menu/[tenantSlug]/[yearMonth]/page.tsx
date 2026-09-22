@@ -1710,6 +1710,15 @@ export default function MenuEditorPage({ params }: { params: Params }) {
                                 </DraggableCell>
                               </div>
 
+                              {/* Optional extra item(s) — cardápio normal */}
+                              <MealExtras
+                                extras={day.extras?.breakfast ?? []}
+                                dishOptions={allDishOptions}
+                                onAdd={(text, dishId) => addExtraItem(day.date, 'breakfast', text, dishId)}
+                                onUpdate={(itemId, text) => updateExtraItem(day.date, 'breakfast', itemId, text)}
+                                onRemove={(itemId) => removeExtraItem(day.date, 'breakfast', itemId)}
+                              />
+
                               {/* Diabéticos Note Dropdown */}
                               <div className="text-[10px] leading-tight text-red-800">
                                 <span className="font-bold">Diabéticos:</span>{' '}
@@ -1778,15 +1787,6 @@ export default function MenuEditorPage({ params }: { params: Params }) {
                                   ( FAZER PARA LANCHE DA TARDE TAMBÉM)
                                 </span>
                               </div>
-
-                              {/* Optional extra item(s) */}
-                              <MealExtras
-                                extras={day.extras?.breakfast ?? []}
-                                dishOptions={allDishOptions}
-                                onAdd={(text, dishId) => addExtraItem(day.date, 'breakfast', text, dishId)}
-                                onUpdate={(itemId, text) => updateExtraItem(day.date, 'breakfast', itemId, text)}
-                                onRemove={(itemId) => removeExtraItem(day.date, 'breakfast', itemId)}
-                              />
                             </div>
                           )}
                         </td>
@@ -1956,6 +1956,15 @@ export default function MenuEditorPage({ params }: { params: Params }) {
                                 </div>
                               </div>
 
+                              {/* Optional extra item(s) — cardápio normal */}
+                              <MealExtras
+                                extras={day.extras?.lunch ?? []}
+                                dishOptions={allDishOptions}
+                                onAdd={(text, dishId) => addExtraItem(day.date, 'lunch', text, dishId)}
+                                onUpdate={(itemId, text) => updateExtraItem(day.date, 'lunch', itemId, text)}
+                                onRemove={(itemId) => removeExtraItem(day.date, 'lunch', itemId)}
+                              />
+
                               {/* Diabéticos & Pastosos notes */}
                               <div className="pt-1 border-t border-slate-200 text-[9.5px] leading-tight text-slate-700 space-y-1">
                                 <DraggableCell
@@ -2018,15 +2027,6 @@ export default function MenuEditorPage({ params }: { params: Params }) {
                                   {day.lunchPastoso ?? 'colocar módulo de fibras (1 colher de chá)'}
                                 </DraggableCell>
                               </div>
-
-                              {/* Optional extra item(s) */}
-                              <MealExtras
-                                extras={day.extras?.lunch ?? []}
-                                dishOptions={allDishOptions}
-                                onAdd={(text, dishId) => addExtraItem(day.date, 'lunch', text, dishId)}
-                                onUpdate={(itemId, text) => updateExtraItem(day.date, 'lunch', itemId, text)}
-                                onRemove={(itemId) => removeExtraItem(day.date, 'lunch', itemId)}
-                              />
                             </div>
                           )}
                         </td>
@@ -2176,6 +2176,15 @@ export default function MenuEditorPage({ params }: { params: Params }) {
                                 </DraggableCell>
                               </div>
 
+                              {/* Optional extra item(s) — cardápio normal */}
+                              <MealExtras
+                                extras={day.extras?.afternoonSnack ?? []}
+                                dishOptions={allDishOptions}
+                                onAdd={(text, dishId) => addExtraItem(day.date, 'afternoonSnack', text, dishId)}
+                                onUpdate={(itemId, text) => updateExtraItem(day.date, 'afternoonSnack', itemId, text)}
+                                onRemove={(itemId) => removeExtraItem(day.date, 'afternoonSnack', itemId)}
+                              />
+
                               <div className="text-[9.5px] leading-tight text-red-800">
                                 <span className="font-bold">Diabéticos:</span>{' '}
                                 <DraggableCell
@@ -2207,15 +2216,6 @@ export default function MenuEditorPage({ params }: { params: Params }) {
                                   {day.afternoonSnackDiabetic ?? 'Escolher 3 opções: Queijo, Ovo, pão integral, banana cozida com canela e farelo de aveia, batata doce, aipim com queijo minas, café com leite e adoçante, Iogurte diet.'}
                                 </DraggableCell>
                               </div>
-
-                              {/* Optional extra item(s) */}
-                              <MealExtras
-                                extras={day.extras?.afternoonSnack ?? []}
-                                dishOptions={allDishOptions}
-                                onAdd={(text, dishId) => addExtraItem(day.date, 'afternoonSnack', text, dishId)}
-                                onUpdate={(itemId, text) => updateExtraItem(day.date, 'afternoonSnack', itemId, text)}
-                                onRemove={(itemId) => removeExtraItem(day.date, 'afternoonSnack', itemId)}
-                              />
                             </div>
                           )}
                         </td>
@@ -2289,6 +2289,15 @@ export default function MenuEditorPage({ params }: { params: Params }) {
                                 </DraggableCell>
                               </div>
 
+                              {/* Optional extra item(s) — cardápio normal */}
+                              <MealExtras
+                                extras={day.extras?.dinner ?? []}
+                                dishOptions={allDishOptions}
+                                onAdd={(text, dishId) => addExtraItem(day.date, 'dinner', text, dishId)}
+                                onUpdate={(itemId, text) => updateExtraItem(day.date, 'dinner', itemId, text)}
+                                onRemove={(itemId) => removeExtraItem(day.date, 'dinner', itemId)}
+                              />
+
                               <div className="text-[9.5px] leading-tight text-red-800">
                                 <span className="font-bold">Diabéticos:</span>{' '}
                                 <DraggableCell
@@ -2320,15 +2329,6 @@ export default function MenuEditorPage({ params }: { params: Params }) {
                                   {day.dinnerDiabetic || 'Repetir o almoço, porém ½ porção de carboidratos ou caldo de legumes com módulo de fibras( 1 colher de chá)'}
                                 </DraggableCell>
                               </div>
-
-                              {/* Optional extra item(s) */}
-                              <MealExtras
-                                extras={day.extras?.dinner ?? []}
-                                dishOptions={allDishOptions}
-                                onAdd={(text, dishId) => addExtraItem(day.date, 'dinner', text, dishId)}
-                                onUpdate={(itemId, text) => updateExtraItem(day.date, 'dinner', itemId, text)}
-                                onRemove={(itemId) => removeExtraItem(day.date, 'dinner', itemId)}
-                              />
                             </div>
                           )}
                         </td>
@@ -2402,6 +2402,15 @@ export default function MenuEditorPage({ params }: { params: Params }) {
                                 </DraggableCell>
                               </div>
 
+                              {/* Optional extra item(s) — cardápio normal */}
+                              <MealExtras
+                                extras={day.extras?.supper ?? []}
+                                dishOptions={allDishOptions}
+                                onAdd={(text, dishId) => addExtraItem(day.date, 'supper', text, dishId)}
+                                onUpdate={(itemId, text) => updateExtraItem(day.date, 'supper', itemId, text)}
+                                onRemove={(itemId) => removeExtraItem(day.date, 'supper', itemId)}
+                              />
+
                               <div className="text-[9.5px] leading-tight text-red-800">
                                 <span className="font-bold">Diabéticos:</span>{' '}
                                 <DraggableCell
@@ -2433,15 +2442,6 @@ export default function MenuEditorPage({ params }: { params: Params }) {
                                   {day.supperDiabetic ?? 'Mingau de aveia com adoçante ou Escolher 2 opções: Queijo, Ovo, pão integral, banana cozida com canela e farelo de aveia, batata doce, aipim com queijo minas, café com leite e adoçante, Iogurte diet.'}
                                 </DraggableCell>
                               </div>
-
-                              {/* Optional extra item(s) */}
-                              <MealExtras
-                                extras={day.extras?.supper ?? []}
-                                dishOptions={allDishOptions}
-                                onAdd={(text, dishId) => addExtraItem(day.date, 'supper', text, dishId)}
-                                onUpdate={(itemId, text) => updateExtraItem(day.date, 'supper', itemId, text)}
-                                onRemove={(itemId) => removeExtraItem(day.date, 'supper', itemId)}
-                              />
                             </div>
                           )}
                         </td>
