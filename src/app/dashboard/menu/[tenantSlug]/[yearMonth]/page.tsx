@@ -21,6 +21,7 @@ import {
   Sparkles,
   Plus,
   X,
+  AlertTriangle,
 } from 'lucide-react';
 import { format, parse } from 'date-fns';
 import { supabase } from '@/lib/supabase';
@@ -448,6 +449,7 @@ export default function MenuEditorPage({ params }: { params: Params }) {
   const [isSyncing, setIsSyncing] = useState(true);
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
 
   // Field being edited: { date, field }
   const [editingCell, setEditingCell] = useState<{ date: string; field: keyof DailyMeal } | null>(null);
@@ -1186,6 +1188,7 @@ export default function MenuEditorPage({ params }: { params: Params }) {
   const handleSave = async () => {
     if (!tenant) return;
     setSaving(true);
+    setSaveError(null);
 
     const upserts = days.map((day) => ({
       tenant_id: tenant.id,
@@ -1221,14 +1224,28 @@ export default function MenuEditorPage({ params }: { params: Params }) {
     const startDate = `${yearMonth}-01`;
     const endDate = `${yearMonth}-31`;
 
-    await supabase
+    const { error: deleteError } = await supabase
       .from('monthly_menus')
       .delete()
       .eq('tenant_id', tenant.id)
       .gte('date', startDate)
       .lte('date', endDate);
 
-    await supabase.from('monthly_menus').insert(upserts);
+    if (deleteError) {
+      console.error('Erro ao limpar cardápio anterior:', deleteError);
+      setSaving(false);
+      setSaveError(`Falha ao salvar: ${deleteError.message}`);
+      return;
+    }
+
+    const { error: insertError } = await supabase.from('monthly_menus').insert(upserts);
+
+    if (insertError) {
+      console.error('Erro ao salvar cardápio:', insertError);
+      setSaving(false);
+      setSaveError(`Falha ao salvar: ${insertError.message}`);
+      return;
+    }
 
     setSaving(false);
     setSaved(true);
@@ -1394,6 +1411,26 @@ export default function MenuEditorPage({ params }: { params: Params }) {
       style={{ '--tenant-color': tenant.primary_color } as React.CSSProperties}
     >
       {/* Floating toast notification for swap feedback */}
+      {saveError && (
+        <div className="no-print fixed bottom-6 right-6 z-50 bg-red-950 text-white px-4 py-3 rounded-xl shadow-2xl border border-red-700 animate-slide-up flex items-start gap-3 max-w-md">
+          <div className="w-8 h-8 rounded-full bg-red-500/20 text-red-400 flex items-center justify-center shrink-0">
+            <AlertTriangle className="w-4 h-4" />
+          </div>
+          <div className="flex-1">
+            <h4 className="font-bold text-xs text-red-300">Não foi possível salvar</h4>
+            <p className="text-xs text-red-100 mt-0.5 break-words">{saveError}</p>
+          </div>
+          <button
+            type="button"
+            onClick={() => setSaveError(null)}
+            className="shrink-0 text-red-300 hover:text-white transition-colors"
+            aria-label="Fechar aviso"
+          >
+            <X className="w-3.5 h-3.5" />
+          </button>
+        </div>
+      )}
+
       {swapToast && (
         <div className="no-print fixed bottom-6 right-6 z-50 bg-slate-900 text-white px-4 py-3 rounded-xl shadow-2xl border border-slate-700 animate-slide-up flex items-center gap-3 max-w-md">
           <div className="w-8 h-8 rounded-full bg-emerald-500/20 text-emerald-400 flex items-center justify-center shrink-0">
