@@ -282,16 +282,16 @@ export const NUTRITIONIST_LARES_DAYS: Record<number, NutritionistDailyPlan> = {
     juice: 'Suco de abacaxi',
   },
   6: {
-    lunchMain: 'OMELETE DE QUEIJO',
-    lunchSide: 'Arroz/ feijão, maionese',
-    lunchSalad: 'Alface e tomate',
-    juice: 'Suco de acerola',
-  },
-  7: {
     lunchMain: 'MÚSCULO EM CUBOS',
     lunchSide: 'Arroz com cenoura picadinha e cozida/Feijão, Purê de batata',
     lunchSalad: 'Alface e tomate',
     juice: 'Suco de manga',
+  },
+  7: {
+    lunchMain: 'OMELETE DE QUEIJO',
+    lunchSide: 'Arroz/ feijão, maionese',
+    lunchSalad: 'Alface e tomate',
+    juice: 'Suco de acerola',
   },
   8: {
     lunchMain: 'SOBRECOXA ASSADA',
@@ -336,10 +336,10 @@ export const NUTRITIONIST_LARES_DAYS: Record<number, NutritionistDailyPlan> = {
     juice: 'Suco de manga',
   },
   15: {
-    lunchMain: 'MOQUECA DE PEIXE',
-    lunchSide: 'Arroz/ feijão',
-    lunchSalad: 'banana frita, alface e tomate',
-    juice: 'Suco de abacaxi',
+    lunchMain: 'MÚSCULO ENSOPADO',
+    lunchSide: 'Arroz/ feijão (opcional), purê de inhame',
+    lunchSalad: 'couve flor na manteiga, Alface e tomate',
+    juice: 'Suco de manga',
   },
   16: {
     lunchMain: 'ESCONDIDINHO DE CARNE MOÍDA',
@@ -366,28 +366,28 @@ export const NUTRITIONIST_LARES_DAYS: Record<number, NutritionistDailyPlan> = {
     juice: 'Suco de acerola',
   },
   20: {
-    lunchMain: 'MÚSCULO ENSOPADO',
-    lunchSide: 'Arroz/ feijão (opcional), purê de inhame',
-    lunchSalad: 'couve flor na manteiga, Alface e tomate',
-    juice: 'Suco de manga',
-  },
-  21: {
     lunchMain: 'STROGONOFF DE FRANGO',
     lunchSide: 'Arroz/ feijão, batata palha',
     lunchSalad: 'abobrinha cozida, Alface e tomate',
     juice: 'Suco de abacaxi',
   },
-  22: {
-    lunchMain: 'ESCONDIDINHO DE CARNE MOÍDA',
+  21: {
+    lunchMain: 'MOQUECA DE PEIXE',
     lunchSide: 'Arroz/ feijão',
-    lunchSalad: 'Brócolis na manteiga, Alface e tomate',
-    juice: 'Suco de manga',
+    lunchSalad: 'banana frita, alface e tomate',
+    juice: 'Suco de abacaxi',
   },
-  23: {
+  22: {
     lunchMain: 'CARNE DE PORCO EM CUBOS',
     lunchSide: 'Arroz, Tutu à mineira',
     lunchSalad: 'couve refogada, Alface e tomate',
     juice: 'Suco de acerola',
+  },
+  23: {
+    lunchMain: 'ESCONDIDINHO DE CARNE MOÍDA',
+    lunchSide: 'Arroz/ feijão',
+    lunchSalad: 'Brócolis na manteiga, Alface e tomate',
+    juice: 'Suco de manga',
   },
   24: {
     lunchMain: 'OMELETE DE QUEIJO',

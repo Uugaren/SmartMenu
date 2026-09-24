@@ -22,10 +22,12 @@ import {
   Plus,
   X,
   AlertTriangle,
+  ShoppingCart,
 } from 'lucide-react';
 import { format, parse } from 'date-fns';
 import { supabase } from '@/lib/supabase';
 import { generateMonthlyMenu, organizeIntoWeeks } from '@/lib/menuGenerator';
+import { calculateMeatShoppingList } from '@/lib/shoppingList';
 import type { Tenant, Dish, DailyMeal, MonthlyMenu, DishCategory, MealSlot, ExtraMealItem } from '@/lib/types';
 import {
   BREAKFAST_FRUITS,
@@ -450,6 +452,7 @@ export default function MenuEditorPage({ params }: { params: Params }) {
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
+  const [showShoppingList, setShowShoppingList] = useState(false);
 
   // Field being edited: { date, field }
   const [editingCell, setEditingCell] = useState<{ date: string; field: keyof DailyMeal } | null>(null);
@@ -1457,6 +1460,73 @@ export default function MenuEditorPage({ params }: { params: Params }) {
         </div>
       )}
 
+      {/* Shopping list modal */}
+      {showShoppingList && (
+        <div
+          className="no-print fixed inset-0 z-[60] bg-slate-950/60 flex items-center justify-center p-4"
+          onClick={() => setShowShoppingList(false)}
+        >
+          <div
+            className="bg-white rounded-2xl shadow-2xl max-w-lg w-full max-h-[80vh] overflow-y-auto"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between px-5 py-4 border-b border-slate-200 sticky top-0 bg-white rounded-t-2xl">
+              <div className="flex items-center gap-2">
+                <ShoppingCart className="w-4 h-4 text-slate-700" />
+                <h3 className="font-display font-bold text-sm text-slate-900">
+                  Lista de Compras — Carnes ({monthLabel})
+                </h3>
+              </div>
+              <button
+                onClick={() => setShowShoppingList(false)}
+                className="cursor-pointer text-slate-400 hover:text-slate-700 transition-colors"
+                aria-label="Fechar"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <div className="p-5 space-y-3">
+              <p className="text-xs text-slate-500">
+                Calculado a partir do prato principal do almoço de cada dia deste cardápio.
+                Regra: 5kg por ocorrência (pacotes de 2,5kg), exceto carne moída (4kg por
+                ocorrência, pacotes de 2kg). Alguns pratos podem exigir ajuste manual — confira
+                antes de fechar o pedido.
+              </p>
+
+              {calculateMeatShoppingList(days).length === 0 ? (
+                <p className="text-sm text-slate-400 italic">
+                  Nenhum prato deste cardápio foi reconhecido como carne cadastrada.
+                </p>
+              ) : (
+                <table className="w-full text-xs">
+                  <thead>
+                    <tr className="text-left text-slate-500 border-b border-slate-200">
+                      <th className="py-1.5 font-semibold">Carne</th>
+                      <th className="py-1.5 font-semibold text-center">Dias</th>
+                      <th className="py-1.5 font-semibold text-right">Total</th>
+                      <th className="py-1.5 font-semibold text-right">Pacotes</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {calculateMeatShoppingList(days).map((item) => (
+                      <tr key={item.category} className="border-b border-slate-100">
+                        <td className="py-2 font-medium text-slate-800">{item.category}</td>
+                        <td className="py-2 text-center text-slate-600">{item.occurrences}</td>
+                        <td className="py-2 text-right font-bold text-slate-900">{item.kg}kg</td>
+                        <td className="py-2 text-right text-slate-600">
+                          {item.packages}× {item.packageKg}kg
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* =================== SCREEN HEADER =================== */}
       <header className="no-print border-b border-border bg-white/90 backdrop-blur-md sticky top-0 z-50 shadow-sm">
         <div className="max-w-[1600px] mx-auto px-4 py-3 flex items-center justify-between">
@@ -1511,6 +1581,13 @@ export default function MenuEditorPage({ params }: { params: Params }) {
                 <Save className="w-3.5 h-3.5" />
               )}
               {saving ? 'Salvando...' : saved ? 'Salvo!' : 'Salvar'}
+            </button>
+            <button
+              onClick={() => setShowShoppingList(true)}
+              className="cursor-pointer hidden sm:flex items-center gap-2 px-3.5 py-2 text-xs font-display font-semibold text-slate-700 bg-white border border-slate-300 rounded-xl hover:bg-slate-50 transition-colors duration-200 shadow-sm"
+            >
+              <ShoppingCart className="w-4 h-4 text-slate-600" />
+              <span>Lista de Compras</span>
             </button>
             <button
               onClick={() => window.print()}
@@ -1956,7 +2033,7 @@ export default function MenuEditorPage({ params }: { params: Params }) {
                                 </div>
                               </div>
 
-                              {/* Optional extra item(s) — cardápio normal */}
+                              {/* Optional extra item(s) — cardápio normal (ex: sobremesa extra) */}
                               <MealExtras
                                 extras={day.extras?.lunch ?? []}
                                 dishOptions={allDishOptions}
