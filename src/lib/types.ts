@@ -56,6 +56,12 @@ export interface ExtraMealItem {
   id: string;
   text: string;
   dishId?: string | null;
+  /**
+   * Nome do campo (ex: 'lunchMain') após o qual este item extra deve ser
+   * exibido. Undefined = exibido no fim da refeição (comportamento padrão).
+   * Controlado via arrastar-e-soltar entre as linhas do almoço.
+   */
+  afterField?: string;
 }
 
 export interface MonthlyMenu {

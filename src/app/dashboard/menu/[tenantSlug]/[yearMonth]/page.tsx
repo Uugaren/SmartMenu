@@ -234,33 +234,62 @@ function CreatableInlineDropdown({
 // ============================================================================
 // Optional extra item(s) per meal (e.g. an extra dessert at lunch).
 // Fully optional: shows only a discreet "+" button (never printed) when empty.
+//
+// ExtrasSlot renders the extras anchored to ONE position within a meal (e.g.
+// "right after the main dish"). Meals with a single line (breakfast snack,
+// dinner, supper) use a single slot with the add button. Lunch, which has
+// several distinct lines (side, main, salad, juice), uses one slot per line
+// so extras can be dragged to sit after any of them — see handleDragExtra*
+// in the page component.
 // ============================================================================
-function MealExtras({
-  extras,
+function ExtrasSlot({
+  items,
   dishOptions,
+  isDropTarget,
+  onDragOverSlot,
+  onDragLeaveSlot,
+  onDropSlot,
+  onDragStartItem,
+  onDragEndItem,
+  onUpdateItem,
+  onRemoveItem,
+  showAddButton,
   onAdd,
-  onUpdate,
-  onRemove,
 }: {
-  extras: ExtraMealItem[];
+  items: ExtraMealItem[];
   dishOptions: { id: string; name: string }[];
+  isDropTarget: boolean;
+  onDragOverSlot: (e: React.DragEvent) => void;
+  onDragLeaveSlot: (e: React.DragEvent) => void;
+  onDropSlot: (e: React.DragEvent) => void;
+  onDragStartItem: (itemId: string, text: string, e: React.DragEvent) => void;
+  onDragEndItem: () => void;
+  onUpdateItem: (itemId: string, text: string) => void;
+  onRemoveItem: (itemId: string) => void;
+  showAddButton: boolean;
   onAdd: (text: string, dishId?: string) => void;
-  onUpdate: (itemId: string, text: string) => void;
-  onRemove: (itemId: string) => void;
 }) {
   const [adding, setAdding] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
 
   return (
-    <div className="mt-1 space-y-1 w-full min-w-0" onClick={(e) => e.stopPropagation()}>
-      {extras.map((item) =>
+    <div
+      className={`space-y-1 w-full min-w-0 rounded transition-colors min-h-[6px] ${
+        isDropTarget ? 'bg-emerald-50 ring-1 ring-emerald-400' : ''
+      }`}
+      onClick={(e) => e.stopPropagation()}
+      onDragOver={onDragOverSlot}
+      onDragLeave={onDragLeaveSlot}
+      onDrop={onDropSlot}
+    >
+      {items.map((item) =>
         editingId === item.id ? (
           <CreatableInlineDropdown
             key={item.id}
             options={dishOptions}
             value={item.text}
             onSelect={(val) => {
-              onUpdate(item.id, val);
+              onUpdateItem(item.id, val);
               setEditingId(null);
             }}
             onClose={() => setEditingId(null)}
@@ -269,18 +298,22 @@ function MealExtras({
         ) : (
           <div
             key={item.id}
-            className="group/extra flex items-start gap-1 w-full min-w-0 text-[11px] leading-tight"
+            draggable
+            onDragStart={(e) => onDragStartItem(item.id, item.text, e)}
+            onDragEnd={onDragEndItem}
+            className="group/extra flex items-start gap-1 w-full min-w-0 text-[11px] leading-tight cursor-grab active:cursor-grabbing"
           >
+            <GripVertical className="no-print w-2.5 h-2.5 mt-0.5 shrink-0 text-slate-300 group-hover/extra:text-slate-500 transition-colors" />
             <span
               className="flex-1 min-w-0 cursor-pointer break-words [overflow-wrap:anywhere]"
               onClick={() => setEditingId(item.id)}
-              title="Clique para editar este item extra"
+              title="Clique para editar, ou arraste para reposicionar entre as linhas"
             >
               {item.text}
             </span>
             <button
               type="button"
-              onClick={() => onRemove(item.id)}
+              onClick={() => onRemoveItem(item.id)}
               className="no-print shrink-0 text-red-400 hover:text-red-600 opacity-0 group-hover/extra:opacity-100 transition-opacity"
               aria-label="Remover item extra"
               title="Remover item extra"
@@ -291,28 +324,29 @@ function MealExtras({
         )
       )}
 
-      {adding ? (
-        <CreatableInlineDropdown
-          options={dishOptions}
-          value={null}
-          onSelect={(val, dishId) => {
-            onAdd(val, dishId);
-            setAdding(false);
-          }}
-          onClose={() => setAdding(false)}
-          placeholder="Item extra (texto livre ou item do banco)..."
-        />
-      ) : (
-        <button
-          type="button"
-          onClick={() => setAdding(true)}
-          className="no-print flex items-center justify-center w-4 h-4 rounded-full text-slate-400 hover:text-emerald-700 hover:bg-emerald-100 transition-colors"
-          aria-label="Adicionar item extra opcional"
-          title="Adicionar item extra opcional"
-        >
-          <Plus className="w-3 h-3" />
-        </button>
-      )}
+      {showAddButton &&
+        (adding ? (
+          <CreatableInlineDropdown
+            options={dishOptions}
+            value={null}
+            onSelect={(val, dishId) => {
+              onAdd(val, dishId);
+              setAdding(false);
+            }}
+            onClose={() => setAdding(false)}
+            placeholder="Item extra (texto livre ou item do banco)..."
+          />
+        ) : (
+          <button
+            type="button"
+            onClick={() => setAdding(true)}
+            className="no-print flex items-center justify-center w-4 h-4 rounded-full text-slate-400 hover:text-emerald-700 hover:bg-emerald-100 transition-colors"
+            aria-label="Adicionar item extra opcional"
+            title="Adicionar item extra opcional"
+          >
+            <Plus className="w-3 h-3" />
+          </button>
+        ))}
     </div>
   );
 }
@@ -462,12 +496,14 @@ export default function MenuEditorPage({ params }: { params: Params }) {
     | { type: 'CELL'; date: string; field: keyof DailyMeal; value: string }
     | { type: 'DAY'; date: string; label: string }
     | { type: 'MEAL'; date: string; mealType: MealType; label: string }
+    | { type: 'EXTRA'; date: string; mealType: MealType; itemId: string; text: string }
     | null
   >(null);
   const [dropTarget, setDropTarget] = useState<
     | { type: 'CELL'; date: string; field: keyof DailyMeal }
     | { type: 'DAY'; date: string }
     | { type: 'MEAL'; date: string; mealType: MealType }
+    | { type: 'EXTRA_SLOT'; date: string; mealType: MealType; anchor: string }
     | null
   >(null);
   const [swapToast, setSwapToast] = useState<{ title: string; message: string } | null>(null);
@@ -731,6 +767,114 @@ export default function MenuEditorPage({ params }: { params: Params }) {
       );
     },
     []
+  );
+
+  // Reposition an extra item to sit after a given anchor line within its meal
+  // (e.g. move an extra dessert from "after the juice" to "after the salad").
+  // anchor === 'end' clears afterField, placing it back at the meal's default slot.
+  const moveExtraToAnchor = useCallback(
+    (date: string, mealType: MealType, itemId: string, anchor: string) => {
+      setDays((prev) =>
+        prev.map((day) => {
+          if (day.date !== date) return day;
+          const currentExtras = day.extras?.[mealType] ?? [];
+          const updated = currentExtras.map((item) =>
+            item.id === itemId ? { ...item, afterField: anchor === 'end' ? undefined : anchor } : item
+          );
+          return { ...day, extras: { ...day.extras, [mealType]: updated } };
+        })
+      );
+    },
+    []
+  );
+
+  // Drag and Drop event handlers (Extra item reposition within a meal)
+  const handleDragExtraStart = useCallback(
+    (date: string, mealType: MealType, itemId: string, text: string, e: React.DragEvent) => {
+      e.stopPropagation();
+      const payload = { type: 'EXTRA' as const, date, mealType, itemId, text };
+      setDragItem(payload);
+      try {
+        e.dataTransfer.setData('text/plain', JSON.stringify(payload));
+        e.dataTransfer.effectAllowed = 'move';
+      } catch {
+        // ignore
+      }
+    },
+    []
+  );
+
+  const handleDragExtraSlotOver = useCallback(
+    (date: string, mealType: MealType, anchor: string, e: React.DragEvent) => {
+      e.preventDefault();
+      e.stopPropagation();
+      try {
+        e.dataTransfer.dropEffect = 'move';
+      } catch {
+        // ignore
+      }
+      setDropTarget((prev) => {
+        if (prev?.type === 'EXTRA_SLOT' && prev.date === date && prev.mealType === mealType && prev.anchor === anchor) {
+          return prev;
+        }
+        return { type: 'EXTRA_SLOT', date, mealType, anchor };
+      });
+    },
+    []
+  );
+
+  const handleDragExtraSlotLeave = useCallback(
+    (date: string, mealType: MealType, anchor: string, e: React.DragEvent) => {
+      e.preventDefault();
+      e.stopPropagation();
+      setDropTarget((prev) => {
+        if (prev?.type === 'EXTRA_SLOT' && prev.date === date && prev.mealType === mealType && prev.anchor === anchor) {
+          return null;
+        }
+        return prev;
+      });
+    },
+    []
+  );
+
+  const handleDropExtraSlot = useCallback(
+    (date: string, mealType: MealType, anchor: string, e: React.DragEvent) => {
+      e.preventDefault();
+      e.stopPropagation();
+
+      let source = dragItem;
+      if (!source) {
+        try {
+          const dataStr = e.dataTransfer.getData('text/plain');
+          if (dataStr) source = JSON.parse(dataStr);
+        } catch {
+          // ignore
+        }
+      }
+
+      if (source && (source as any).type === 'EXTRA') {
+        const extraSource = source as { date: string; mealType: MealType; itemId: string };
+        if (extraSource.date === date && extraSource.mealType === mealType) {
+          moveExtraToAnchor(date, mealType, extraSource.itemId, anchor);
+        }
+      }
+
+      setDragItem(null);
+      setDropTarget(null);
+    },
+    [dragItem, moveExtraToAnchor]
+  );
+
+  const isExtraSlotDropTarget = useCallback(
+    (date: string, mealType: MealType, anchor: string) => {
+      return (
+        dropTarget?.type === 'EXTRA_SLOT' &&
+        dropTarget.date === date &&
+        dropTarget.mealType === mealType &&
+        dropTarget.anchor === anchor
+      );
+    },
+    [dropTarget]
   );
 
   // Helper check for cell drag highlight
@@ -1122,6 +1266,8 @@ export default function MenuEditorPage({ params }: { params: Params }) {
           if (mealSource.date !== targetDate) {
             swapMeal(mealSource.date, targetDate, mealSource.mealType);
           }
+        } else if (sourceType === 'EXTRA') {
+          // An extra item was dropped outside its reposition slots -> ignore
         } else {
           const cellSource = source as { date: string; field: keyof DailyMeal; value: string };
           if (cellSource.date !== targetDate || cellSource.field !== targetField) {
@@ -1455,6 +1601,8 @@ export default function MenuEditorPage({ params }: { params: Params }) {
               ? `Solte sobre outro dia para trocar TODAS as preparações de [${getFormattedDayName(dragItem.date)}]`
               : dragItem.type === 'MEAL'
               ? `Solte sobre outro dia para trocar [${dragItem.label}] de [${getFormattedDayName(dragItem.date)}]`
+              : dragItem.type === 'EXTRA'
+              ? `Solte sobre outra linha da refeição para reposicionar "${dragItem.text}"`
               : `Solte sobre outro prato/dia para trocar de lugar com "${dragItem.value}"`}
           </span>
         </div>
@@ -1523,6 +1671,71 @@ export default function MenuEditorPage({ params }: { params: Params }) {
                 </table>
               )}
             </div>
+
+            <div className="px-5 py-4 border-t border-slate-200 flex justify-end sticky bottom-0 bg-white rounded-b-2xl">
+              <button
+                onClick={() => window.print()}
+                className="cursor-pointer flex items-center gap-2 px-3.5 py-2 text-xs font-display font-semibold text-white rounded-xl shadow-sm transition-colors duration-200"
+                style={{ backgroundColor: tenant.primary_color }}
+              >
+                <Printer className="w-3.5 h-3.5" />
+                <span>Imprimir Lista de Compras</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Printable version of the shopping list (screen: hidden, print: visible) */}
+      {showShoppingList && (
+        <div className="hidden print:block text-black">
+          <div className="flex items-center justify-between border-b-2 border-slate-300 pb-4 mb-6">
+            <img src={logoUrl} alt={tenant.name} className="h-20 w-auto object-contain" />
+            <div className="text-center">
+              <h1 className="font-display font-bold text-xl uppercase tracking-wide">
+                Lista de Compras — Carnes
+              </h1>
+              <p className="text-sm text-slate-700">
+                {tenant.name} — {monthLabel}
+              </p>
+            </div>
+            <img src={logoUrl} alt={tenant.name} className="h-20 w-auto object-contain" />
+          </div>
+
+          <table className="w-full border-collapse text-sm">
+            <thead>
+              <tr className="bg-slate-200">
+                <th className="border-[1.5px] border-black p-3 text-left font-bold uppercase">Carne</th>
+                <th className="border-[1.5px] border-black p-3 text-center font-bold uppercase">
+                  Ocorrências no mês
+                </th>
+                <th className="border-[1.5px] border-black p-3 text-center font-bold uppercase">Total</th>
+                <th className="border-[1.5px] border-black p-3 text-center font-bold uppercase">Pacotes</th>
+              </tr>
+            </thead>
+            <tbody>
+              {calculateMeatShoppingList(days).map((item) => (
+                <tr key={item.category}>
+                  <td className="border-[1.5px] border-black p-3 font-semibold">{item.category}</td>
+                  <td className="border-[1.5px] border-black p-3 text-center">{item.occurrences}</td>
+                  <td className="border-[1.5px] border-black p-3 text-center font-bold">{item.kg}kg</td>
+                  <td className="border-[1.5px] border-black p-3 text-center">
+                    {item.packages}× {item.packageKg}kg
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+
+          <p className="mt-6 text-xs text-slate-600 leading-relaxed">
+            Cálculo baseado no prato principal do almoço de cada dia deste cardápio. Regra: 5kg
+            por ocorrência (pacotes de 2,5kg), exceto carne moída (4kg por ocorrência, pacotes de
+            2kg).
+          </p>
+
+          <div className="mt-16 pt-4 border-t border-slate-300 flex justify-between text-xs text-slate-500">
+            <span>Smart Menu — Lista de Compras Gerada Automaticamente</span>
+            <span>Emitido em {format(new Date(), 'dd/MM/yyyy')}</span>
           </div>
         </div>
       )}
@@ -1613,7 +1826,7 @@ export default function MenuEditorPage({ params }: { params: Params }) {
       </div>
 
       {/* =================== MAIN DOCUMENT CONTENT =================== */}
-      <main className="max-w-[1500px] mx-auto px-4 py-6 space-y-10">
+      <main className={`max-w-[1500px] mx-auto px-4 py-6 space-y-10 ${showShoppingList ? 'print:hidden' : ''}`}>
         {weeks.map((week, weekIdx) => (
           <div key={weekIdx} className="space-y-8">
             {/* ========================================================================= */}
@@ -1788,12 +2001,19 @@ export default function MenuEditorPage({ params }: { params: Params }) {
                               </div>
 
                               {/* Optional extra item(s) — cardápio normal */}
-                              <MealExtras
-                                extras={day.extras?.breakfast ?? []}
+                              <ExtrasSlot
+                                items={day.extras?.breakfast ?? []}
                                 dishOptions={allDishOptions}
+                                isDropTarget={isExtraSlotDropTarget(day.date, 'breakfast', 'end')}
+                                onDragOverSlot={(e) => handleDragExtraSlotOver(day.date, 'breakfast', 'end', e)}
+                                onDragLeaveSlot={(e) => handleDragExtraSlotLeave(day.date, 'breakfast', 'end', e)}
+                                onDropSlot={(e) => handleDropExtraSlot(day.date, 'breakfast', 'end', e)}
+                                onDragStartItem={(itemId, text, e) => handleDragExtraStart(day.date, 'breakfast', itemId, text, e)}
+                                onDragEndItem={handleDragEnd}
+                                onUpdateItem={(itemId, text) => updateExtraItem(day.date, 'breakfast', itemId, text)}
+                                onRemoveItem={(itemId) => removeExtraItem(day.date, 'breakfast', itemId)}
+                                showAddButton
                                 onAdd={(text, dishId) => addExtraItem(day.date, 'breakfast', text, dishId)}
-                                onUpdate={(itemId, text) => updateExtraItem(day.date, 'breakfast', itemId, text)}
-                                onRemove={(itemId) => removeExtraItem(day.date, 'breakfast', itemId)}
                               />
 
                               {/* Diabéticos Note Dropdown */}
@@ -1938,6 +2158,21 @@ export default function MenuEditorPage({ params }: { params: Params }) {
                                   </DraggableCell>
                                 </div>
 
+                                <ExtrasSlot
+                                  items={(day.extras?.lunch ?? []).filter((it) => it.afterField === 'lunchSide')}
+                                  dishOptions={allDishOptions}
+                                  isDropTarget={isExtraSlotDropTarget(day.date, 'lunch', 'lunchSide')}
+                                  onDragOverSlot={(e) => handleDragExtraSlotOver(day.date, 'lunch', 'lunchSide', e)}
+                                  onDragLeaveSlot={(e) => handleDragExtraSlotLeave(day.date, 'lunch', 'lunchSide', e)}
+                                  onDropSlot={(e) => handleDropExtraSlot(day.date, 'lunch', 'lunchSide', e)}
+                                  onDragStartItem={(itemId, text, e) => handleDragExtraStart(day.date, 'lunch', itemId, text, e)}
+                                  onDragEndItem={handleDragEnd}
+                                  onUpdateItem={(itemId, text) => updateExtraItem(day.date, 'lunch', itemId, text)}
+                                  onRemoveItem={(itemId) => removeExtraItem(day.date, 'lunch', itemId)}
+                                  showAddButton={false}
+                                  onAdd={() => {}}
+                                />
+
                                 {/* Editable Protein (Main Dish e.g. Filé Empanado / Bife a Cavalo) */}
                                 <div className="editable-cell p-0.5 rounded -mx-0.5 print:m-0">
                                   <DraggableCell
@@ -1968,6 +2203,21 @@ export default function MenuEditorPage({ params }: { params: Params }) {
                                     {day.lunchMain}
                                   </DraggableCell>
                                 </div>
+
+                                <ExtrasSlot
+                                  items={(day.extras?.lunch ?? []).filter((it) => it.afterField === 'lunchMain')}
+                                  dishOptions={allDishOptions}
+                                  isDropTarget={isExtraSlotDropTarget(day.date, 'lunch', 'lunchMain')}
+                                  onDragOverSlot={(e) => handleDragExtraSlotOver(day.date, 'lunch', 'lunchMain', e)}
+                                  onDragLeaveSlot={(e) => handleDragExtraSlotLeave(day.date, 'lunch', 'lunchMain', e)}
+                                  onDropSlot={(e) => handleDropExtraSlot(day.date, 'lunch', 'lunchMain', e)}
+                                  onDragStartItem={(itemId, text, e) => handleDragExtraStart(day.date, 'lunch', itemId, text, e)}
+                                  onDragEndItem={handleDragEnd}
+                                  onUpdateItem={(itemId, text) => updateExtraItem(day.date, 'lunch', itemId, text)}
+                                  onRemoveItem={(itemId) => removeExtraItem(day.date, 'lunch', itemId)}
+                                  showAddButton={false}
+                                  onAdd={() => {}}
+                                />
 
                                 {/* Editable Salad */}
                                 <div className="editable-cell p-0.5 rounded -mx-0.5 print:m-0">
@@ -2001,6 +2251,21 @@ export default function MenuEditorPage({ params }: { params: Params }) {
                                   </DraggableCell>
                                 </div>
 
+                                <ExtrasSlot
+                                  items={(day.extras?.lunch ?? []).filter((it) => it.afterField === 'lunchSalad')}
+                                  dishOptions={allDishOptions}
+                                  isDropTarget={isExtraSlotDropTarget(day.date, 'lunch', 'lunchSalad')}
+                                  onDragOverSlot={(e) => handleDragExtraSlotOver(day.date, 'lunch', 'lunchSalad', e)}
+                                  onDragLeaveSlot={(e) => handleDragExtraSlotLeave(day.date, 'lunch', 'lunchSalad', e)}
+                                  onDropSlot={(e) => handleDropExtraSlot(day.date, 'lunch', 'lunchSalad', e)}
+                                  onDragStartItem={(itemId, text, e) => handleDragExtraStart(day.date, 'lunch', itemId, text, e)}
+                                  onDragEndItem={handleDragEnd}
+                                  onUpdateItem={(itemId, text) => updateExtraItem(day.date, 'lunch', itemId, text)}
+                                  onRemoveItem={(itemId) => removeExtraItem(day.date, 'lunch', itemId)}
+                                  showAddButton={false}
+                                  onAdd={() => {}}
+                                />
+
                                 {/* Editable Juice */}
                                 <div className="editable-cell p-0.5 rounded -mx-0.5 print:m-0">
                                   <DraggableCell
@@ -2031,16 +2296,22 @@ export default function MenuEditorPage({ params }: { params: Params }) {
                                     {day.juice}
                                   </DraggableCell>
                                 </div>
-                              </div>
 
-                              {/* Optional extra item(s) — cardápio normal (ex: sobremesa extra) */}
-                              <MealExtras
-                                extras={day.extras?.lunch ?? []}
-                                dishOptions={allDishOptions}
-                                onAdd={(text, dishId) => addExtraItem(day.date, 'lunch', text, dishId)}
-                                onUpdate={(itemId, text) => updateExtraItem(day.date, 'lunch', itemId, text)}
-                                onRemove={(itemId) => removeExtraItem(day.date, 'lunch', itemId)}
-                              />
+                                <ExtrasSlot
+                                  items={(day.extras?.lunch ?? []).filter((it) => !it.afterField || it.afterField === 'juice')}
+                                  dishOptions={allDishOptions}
+                                  isDropTarget={isExtraSlotDropTarget(day.date, 'lunch', 'end')}
+                                  onDragOverSlot={(e) => handleDragExtraSlotOver(day.date, 'lunch', 'end', e)}
+                                  onDragLeaveSlot={(e) => handleDragExtraSlotLeave(day.date, 'lunch', 'end', e)}
+                                  onDropSlot={(e) => handleDropExtraSlot(day.date, 'lunch', 'end', e)}
+                                  onDragStartItem={(itemId, text, e) => handleDragExtraStart(day.date, 'lunch', itemId, text, e)}
+                                  onDragEndItem={handleDragEnd}
+                                  onUpdateItem={(itemId, text) => updateExtraItem(day.date, 'lunch', itemId, text)}
+                                  onRemoveItem={(itemId) => removeExtraItem(day.date, 'lunch', itemId)}
+                                  showAddButton
+                                  onAdd={(text, dishId) => addExtraItem(day.date, 'lunch', text, dishId)}
+                                />
+                              </div>
 
                               {/* Diabéticos & Pastosos notes */}
                               <div className="pt-1 border-t border-slate-200 text-[9.5px] leading-tight text-slate-700 space-y-1">
@@ -2254,12 +2525,19 @@ export default function MenuEditorPage({ params }: { params: Params }) {
                               </div>
 
                               {/* Optional extra item(s) — cardápio normal */}
-                              <MealExtras
-                                extras={day.extras?.afternoonSnack ?? []}
+                              <ExtrasSlot
+                                items={day.extras?.afternoonSnack ?? []}
                                 dishOptions={allDishOptions}
+                                isDropTarget={isExtraSlotDropTarget(day.date, 'afternoonSnack', 'end')}
+                                onDragOverSlot={(e) => handleDragExtraSlotOver(day.date, 'afternoonSnack', 'end', e)}
+                                onDragLeaveSlot={(e) => handleDragExtraSlotLeave(day.date, 'afternoonSnack', 'end', e)}
+                                onDropSlot={(e) => handleDropExtraSlot(day.date, 'afternoonSnack', 'end', e)}
+                                onDragStartItem={(itemId, text, e) => handleDragExtraStart(day.date, 'afternoonSnack', itemId, text, e)}
+                                onDragEndItem={handleDragEnd}
+                                onUpdateItem={(itemId, text) => updateExtraItem(day.date, 'afternoonSnack', itemId, text)}
+                                onRemoveItem={(itemId) => removeExtraItem(day.date, 'afternoonSnack', itemId)}
+                                showAddButton
                                 onAdd={(text, dishId) => addExtraItem(day.date, 'afternoonSnack', text, dishId)}
-                                onUpdate={(itemId, text) => updateExtraItem(day.date, 'afternoonSnack', itemId, text)}
-                                onRemove={(itemId) => removeExtraItem(day.date, 'afternoonSnack', itemId)}
                               />
 
                               <div className="text-[9.5px] leading-tight text-red-800">
@@ -2367,12 +2645,19 @@ export default function MenuEditorPage({ params }: { params: Params }) {
                               </div>
 
                               {/* Optional extra item(s) — cardápio normal */}
-                              <MealExtras
-                                extras={day.extras?.dinner ?? []}
+                              <ExtrasSlot
+                                items={day.extras?.dinner ?? []}
                                 dishOptions={allDishOptions}
+                                isDropTarget={isExtraSlotDropTarget(day.date, 'dinner', 'end')}
+                                onDragOverSlot={(e) => handleDragExtraSlotOver(day.date, 'dinner', 'end', e)}
+                                onDragLeaveSlot={(e) => handleDragExtraSlotLeave(day.date, 'dinner', 'end', e)}
+                                onDropSlot={(e) => handleDropExtraSlot(day.date, 'dinner', 'end', e)}
+                                onDragStartItem={(itemId, text, e) => handleDragExtraStart(day.date, 'dinner', itemId, text, e)}
+                                onDragEndItem={handleDragEnd}
+                                onUpdateItem={(itemId, text) => updateExtraItem(day.date, 'dinner', itemId, text)}
+                                onRemoveItem={(itemId) => removeExtraItem(day.date, 'dinner', itemId)}
+                                showAddButton
                                 onAdd={(text, dishId) => addExtraItem(day.date, 'dinner', text, dishId)}
-                                onUpdate={(itemId, text) => updateExtraItem(day.date, 'dinner', itemId, text)}
-                                onRemove={(itemId) => removeExtraItem(day.date, 'dinner', itemId)}
                               />
 
                               <div className="text-[9.5px] leading-tight text-red-800">
@@ -2480,12 +2765,19 @@ export default function MenuEditorPage({ params }: { params: Params }) {
                               </div>
 
                               {/* Optional extra item(s) — cardápio normal */}
-                              <MealExtras
-                                extras={day.extras?.supper ?? []}
+                              <ExtrasSlot
+                                items={day.extras?.supper ?? []}
                                 dishOptions={allDishOptions}
+                                isDropTarget={isExtraSlotDropTarget(day.date, 'supper', 'end')}
+                                onDragOverSlot={(e) => handleDragExtraSlotOver(day.date, 'supper', 'end', e)}
+                                onDragLeaveSlot={(e) => handleDragExtraSlotLeave(day.date, 'supper', 'end', e)}
+                                onDropSlot={(e) => handleDropExtraSlot(day.date, 'supper', 'end', e)}
+                                onDragStartItem={(itemId, text, e) => handleDragExtraStart(day.date, 'supper', itemId, text, e)}
+                                onDragEndItem={handleDragEnd}
+                                onUpdateItem={(itemId, text) => updateExtraItem(day.date, 'supper', itemId, text)}
+                                onRemoveItem={(itemId) => removeExtraItem(day.date, 'supper', itemId)}
+                                showAddButton
                                 onAdd={(text, dishId) => addExtraItem(day.date, 'supper', text, dishId)}
-                                onUpdate={(itemId, text) => updateExtraItem(day.date, 'supper', itemId, text)}
-                                onRemove={(itemId) => removeExtraItem(day.date, 'supper', itemId)}
                               />
 
                               <div className="text-[9.5px] leading-tight text-red-800">
