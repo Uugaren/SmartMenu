@@ -2,7 +2,7 @@
 
 Aplicação web que gera, edita e imprime o cardápio do mês de três casas de repouso e calcula a lista de compras de carnes. Esta é a **v1, single tenant na prática**: feita sob medida para minha sogra, que cuida dos cardápios das casas, antes da decisão de transformar o projeto em SaaS.
 
-> **Status:** v1 em uso real desde ago/2026 · 17 commits · ~5.600 linhas de TypeScript · a v2 multi-tenant (SaaS) está em planejamento.
+> **Status:** v1 em uso real desde ago/2026 · 17 commits · ~5.600 linhas de TypeScript · a v2 multi-tenant no ar em cardapiomagico.com.br
 
 ## O problema
 
